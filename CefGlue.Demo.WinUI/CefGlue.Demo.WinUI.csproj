@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>$(DotnetVersion)-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>Xilium.CefGlue.Demo.WinUI</RootNamespace>
+    <AssemblyName>Xilium.CefGlue.Demo.WinUI</AssemblyName>
+    <UseWinUI>true</UseWinUI>
+    <Nullable>disable</Nullable>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <StartupObject>Xilium.CefGlue.Demo.WinUI.Program</StartupObject>
+
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+
+    <Authors>Marman-HP</Authors>
+    <Copyright>Copyright © 2026 Marman-HP. Portions Copyright © XiliumHQ 2021, OutSystems 2021.</Copyright>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <Import Project="$(ProjectDir)..\CefGlue.CopyLocal.props" />
+
+  <ItemGroup>
+    <ProjectReference Include="..\CefGlue.WinUI\CefGlue.WinUI.csproj" />
+    <ProjectReference Include="..\CefGlue\CefGlue.csproj" />
+    <ProjectReference Include="..\CefGlue.Common\CefGlue.Common.csproj" />
+    <ProjectReference Include="..\CefGlue.Common.Shared\CefGlue.Common.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\cef\runtimes\win-x64\native\**">
+      <Link>runtimes\win-x64\native\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </None>
+  </ItemGroup>
+
+  <Import Project="$(ProjectDir)..\CefGlue.Common\build\CefGlue.Common.targets" />
+
+</Project>

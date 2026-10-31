@@ -1,0 +1,63 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DotnetVersion)-windows</TargetFramework>
+	<OutputType>Library</OutputType>
+	<RootNamespace>Xilium.CefGlue.WinForms</RootNamespace>
+	<AssemblyName>Xilium.CefGlue.WinForms</AssemblyName>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <UseWindowsForms>true</UseWindowsForms>
+    <PackageId>CefGlue.OSR.WinForms$(PackageSuffix)</PackageId>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Authors>Marman-HP</Authors>
+    <Copyright>Copyright © 2026 Marman-HP. Portions Copyright © XiliumHQ 2021, OutSystems 2021.</Copyright>
+  </PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)' == 'Release'">
+		<DocumentationFile>bin\Release\Xilium.CefGlue.Winforms.xml</DocumentationFile>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)' == 'Debug_WindowlessRender'">
+		<DebugSymbols>true</DebugSymbols>
+		<OutputPath>bin\$(Platform)\Debug_WindowlessRender\</OutputPath>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+	</PropertyGroup>
+
+	<ItemGroup>
+	  <Compile Remove="Animation\**" />
+	  <EmbeddedResource Remove="Animation\**" />
+	  <None Remove="Animation\**" />
+	</ItemGroup>
+	<PropertyGroup>
+		<NoWarn>$(NoWarn);CA1416</NoWarn>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<Compile Include="..\CefGlue.Common\BaseCefBrowser.cs">
+			<Link>Common\BaseCefBrowser.cs</Link>
+		</Compile>
+		<AppDesigner Include="Properties\" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <PackageReference Include="Silk.NET.Direct3D11" />
+	  <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\CefGlue.Common\CefGlue.Common.csproj">
+			<PrivateAssets>none</PrivateAssets>
+		</ProjectReference>
+		<ProjectReference Include="..\CefGlue\CefGlue.csproj">
+			<PrivateAssets>all</PrivateAssets>
+		</ProjectReference>
+	</ItemGroup>
+
+</Project>

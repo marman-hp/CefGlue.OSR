@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>$(DotnetVersion)-windows</TargetFramework>
+    <AssemblyName>Xilium.CefGlue.Demo.WPF</AssemblyName>
+    <RootNamespace>Xilium.CefGlue.Demo.WPF</RootNamespace>
+    <UseWPF>true</UseWPF>
+    <StartupObject>Xilium.CefGlue.Demo.WPF.Program</StartupObject>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug_WindowlessRender'">
+    <DebugType />
+    <DefineConstants>$(DefineConstants);WINDOWLESS</DefineConstants>
+  </PropertyGroup>
+
+  <Import Project="$(ProjectDir)..\CefGlue.CopyLocal.props" />
+
+  <ItemGroup>
+    <ProjectReference Include="..\CefGlue.WPF\CefGlue.WPF.csproj" />
+    <ProjectReference Include="..\CefGlue\CefGlue.csproj" />
+    <ProjectReference Include="..\CefGlue.Common\CefGlue.Common.csproj" />
+    <ProjectReference Include="..\CefGlue.Common.Shared\CefGlue.Common.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\cef\runtimes\win-x64\native\**">
+      <Link>runtimes\win-x64\native\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </None>
+  </ItemGroup>
+
+  <Import Project="$(ProjectDir)..\CefGlue.Common\build\CefGlue.Common.targets" />
+
+</Project>

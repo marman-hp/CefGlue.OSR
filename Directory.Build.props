@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+    <PropertyGroup>
+        <DotnetVersion>net10.0</DotnetVersion>
+        <LangVersion>latest</LangVersion>
+        <CefRedistVersion>154.0.33</CefRedistVersion>
+        <AvaloniaVersion>12.1.1</AvaloniaVersion>
+        <CefRedistOSXVersion>154.0.33</CefRedistOSXVersion>
+        <CefRedistLinuxVersion>154.0.33</CefRedistLinuxVersion>
+        <CefBuildVersion>154.0.33+ga03e714+chromium-154.0.8037.94</CefBuildVersion>
+        <Platforms>x64;ARM64</Platforms>
+        <Configurations>Debug;DebugWindowlessRender;Release;ReleaseWPFAvalonia</Configurations>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <PackageOutputPath>$(MSBuildProjectDirectory)\..\Nuget\output</PackageOutputPath>
+        <Version>154.8037.94</Version>
+        <Authors>marman-hp</Authors>
+        <Product>CefGlue.OSR</Product>
+        <AssemblyTitle>CefGlue.OSR</AssemblyTitle>
+        <Description>CefGlue.OSR is a .NET binding for The Chromium Embedded Framework (CEF) by Marshall A. Greenblatt, focused on off-screen rendering, with browser controls for WinForms, WPF, WinUI 3 and Avalonia. Based on CefGlue (XiliumHQ, OutSystems).</Description>
+        <Copyright>Copyright &#xA9; XiliumHQ 2021. Copyright &#xA9; OutSystems 2021. Copyright &#xA9; marman-hp 2026.</Copyright>
+        <PackageDescription>ChromiumEmbedded. $(Description)</PackageDescription>
+        <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageTags>cef, chromium, chrome browser, cefglue, osr, offscreen, winforms, wpf, winui, avalonia</PackageTags>
+        <IncludeSymbols>false</IncludeSymbols>
+        <IncludeSource>false</IncludeSource>
+        <RepositoryUrl>https://github.com/marman-hp/CefGlue.OSR</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <NoWarn>$(NoWarn);NU5100;NU5118;CS1591</NoWarn>
+        <AddSyntheticProjectReferencesForSolutionDependencies>false</AddSyntheticProjectReferencesForSolutionDependencies>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(Platform)' == '' or '$(Platform)' == 'x64'">
+        <ArchitectureConfig>x64</ArchitectureConfig>
+        <PackageSuffix />
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(Platform)' == 'ARM64'">
+        <ArchitectureConfig>arm64</ArchitectureConfig>
+        <PackageSuffix>.ARM64</PackageSuffix>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    </PropertyGroup>
+
+</Project>

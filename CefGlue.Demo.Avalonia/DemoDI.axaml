@@ -1,0 +1,66 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Xilium.CefGlue.Demo.Avalonia.DemoDI"
+        Title="CefGlue.Avalonia Demo - DI (DemoDI)"
+        Width="1000" Height="650">
+
+    <Grid x:Name="RootGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="0"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Menu Grid.Row="0" Background="#FFE8E8E8">
+            <MenuItem Header="_File">
+                <MenuItem Header="_New Tab" Click="OnNewTabMenuItemClick"/>
+                <MenuItem Header="_Close Tab" Click="OnCloseTabMenuItemClick"/>
+                <MenuItem Header="_Open Dev Tools..." Click="OnOpenDevToolsMenuItemClick"/>
+            </MenuItem>
+            <MenuItem Header="_View">
+                <MenuItem x:Name="ShowOverlayInfoMenuItem" Header="Show _Overlay Info"
+                          ToggleType="CheckBox" IsChecked="False" Click="OnShowOverlayInfoMenuItemClick"/>
+                <MenuItem x:Name="ShowActivityLogMenuItem" Header="Show _Activity Log"
+                          ToggleType="CheckBox" IsChecked="False" Click="OnShowActivityLogMenuItemClick"/>
+            </MenuItem>
+        </Menu>
+
+        <Grid Grid.Row="1">
+            <TabControl x:Name="BrowserTabs" SelectionChanged="TabControl_SelectionChanged"/>
+
+            <!-- Hosts the raw CEF control while a page is fullscreen - see DemoDI.axaml.cs's
+                 CreateNewTab/FullscreenModeChanged handler for why TabControl's own selected-content
+                 chrome isn't good enough on its own - mirrors CefGlue.Demo.WinUI's/WPF's identical
+                 FullscreenHost/fullscreenHost. -->
+            <Grid x:Name="FullscreenHost" Background="Black" IsVisible="False"/>
+        </Grid>
+
+        <GridSplitter x:Name="ActivityLogSplitter" Grid.Row="2" Height="5" HorizontalAlignment="Stretch"
+                      ResizeDirection="Rows" Background="LightGray" IsVisible="False"/>
+
+        <!-- Focusable="False" - read-only, append-only display, never a legitimate keyboard focus
+             target - mirrors CefGlue.Demo.WPF's identical activityList remarks. -->
+        <ListBox x:Name="ActivityList" Grid.Row="3" Focusable="False" IsVisible="False"/>
+
+        <Border Grid.Row="4" Background="#FFE8E8E8" Padding="6">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+    
+                <TextBlock x:Name="StatusText" Grid.Column="0" Text="Done" VerticalAlignment="Center"/>
+    
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="Zoom:" VerticalAlignment="Center"/>
+                    <Slider x:Name="ZoomSlider" Minimum="-5" Maximum="5" Value="0" Width="220"
+                            TickFrequency="1" IsSnapToTickEnabled="False" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="ZoomValueText" Text="0.0" Width="32" VerticalAlignment="Center"/>
+                    <Button Content="Reset" Click="OnResetZoomClick"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

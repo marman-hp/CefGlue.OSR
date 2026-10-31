@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DotnetVersion)-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <OutputType>Library</OutputType>
+    <RootNamespace>Xilium.CefGlue.WinUI</RootNamespace>
+    <AssemblyName>Xilium.CefGlue.WinUI</AssemblyName>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <UseWinUI>true</UseWinUI>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>disable</Nullable>
+    <PackageId>CefGlue.OSR.WinUI$(PackageSuffix)</PackageId>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Authors>Marman-HP</Authors>
+    <Copyright>Copyright © 2026 Marman-HP. Portions Copyright © XiliumHQ 2021, OutSystems 2021.</Copyright>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DocumentationFile>bin\Release\Xilium.CefGlue.WinUI.xml</DocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\CefGlue.WinForms\Ime\ImeOpenStatus.cs" Link="Ime\ImeOpenStatus.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\CefGlue.Common\BaseCefBrowser.cs">
+      <Link>Common\BaseCefBrowser.cs</Link>
+    </Compile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" />
+    <PackageReference Include="Silk.NET.Direct3D11" />
+    <PackageReference Include="Silk.NET.DXGI" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CefGlue.Common\CefGlue.Common.csproj">
+      <PrivateAssets>none</PrivateAssets>
+    </ProjectReference>
+    <ProjectReference Include="..\CefGlue\CefGlue.csproj">
+      <PrivateAssets>all</PrivateAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+</Project>

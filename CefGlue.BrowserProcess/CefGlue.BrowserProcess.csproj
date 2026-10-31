@@ -1,0 +1,114 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>$(DotnetVersion)</TargetFramework>
+    <AssemblyName>Xilium.CefGlue.BrowserProcess</AssemblyName>
+    <RootNamespace>Xilium.CefGlue.BrowserProcess</RootNamespace>
+    <RuntimeIdentifiers>osx-x64;osx-arm64;win-x64;win-arm64;linux-x64;linux-arm64</RuntimeIdentifiers>
+    <RunPostBuildEvent>OnOutputUpdated</RunPostBuildEvent>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <PublishCommonConfig>Configuration=$(Configuration);Platform=$(Platform);TargetFramework=$(TargetFramework);IsPublishing=True;PublishTrimmed=False;SelfContained=False;RuntimeIdentifier=</PublishCommonConfig>
+    <IsEditbinEnabled>True</IsEditbinEnabled>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="ObjectBinding\CefGlueGlobalScript.js" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="ObjectBinding\CefGlueGlobalScript.js" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CefGlue.Common.Shared\CefGlue.Common.Shared.csproj" />
+    <ProjectReference Include="..\CefGlue\CefGlue.csproj" />
+  </ItemGroup>
+
+  <Target Name="Editbin" AfterTargets="Compile" Condition="$(IsEditbinEnabled) == True And $([MSBuild]::IsOSPlatform('Windows'))">
+
+    <PropertyGroup>
+      <ApphostLocation>$(ProjectDir)$(BaseIntermediateOutputPath)$(Platform)\$(Configuration)\$(TargetFramework)\</ApphostLocation>
+      <ApphostLocation Condition="'$(IsPublishing)' == 'True'">$(ApphostLocation)$(RuntimeIdentifier)\</ApphostLocation>
+    </PropertyGroup>
+
+    <PropertyGroup>
+      <VswherePath>$(MSBuildProgramFiles32)\Microsoft Visual Studio\Installer\vswhere.exe</VswherePath>
+    </PropertyGroup>
+    <Exec Condition="'$(VcvarsFile)' == '' And Exists('$(VswherePath)')"
+          Command="&quot;$(VswherePath)&quot; -latest -prerelease -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath"
+          ConsoleToMSBuild="true" StandardOutputImportance="low" IgnoreExitCode="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_VsInstallPath" />
+    </Exec>
+    <PropertyGroup Condition="'$(VcvarsFile)' == '' And '$(_VsInstallPath)' != ''">
+      <VcvarsFile>$(_VsInstallPath)\VC\Auxiliary\Build\vcvars64.bat</VcvarsFile>
+    </PropertyGroup>
+
+    <Exec Condition="'$(VcvarsFile)' != '' And Exists('$(VcvarsFile)')"
+          Command="call &quot;$(VcvarsFile)&quot; &gt;nul&#xD;&#xA; editbin /nologo /STACK:0x800000 &quot;$(ApphostLocation)\apphost.exe&quot;&#xD;&#xA;" />
+
+    <SetPeStackReserve Condition="('$(VcvarsFile)' == '' Or !Exists('$(VcvarsFile)')) And Exists('$(ApphostLocation)apphost.exe')"
+                       Path="$(ApphostLocation)apphost.exe" StackReserve="8388608" />
+  </Target>
+
+  <UsingTask TaskName="SetPeStackReserve" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <Path ParameterType="System.String" Required="true" />
+      <StackReserve ParameterType="System.Int64" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System.IO" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        using (var fs = File.Open(Path, FileMode.Open, FileAccess.ReadWrite, FileShare.Read))
+        using (var reader = new BinaryReader(fs))
+        using (var writer = new BinaryWriter(fs))
+        {
+            fs.Position = 0x3C;                                  // e_lfanew
+            var peOffset = reader.ReadInt32();
+            fs.Position = peOffset;
+            if (reader.ReadUInt32() != 0x00004550)               // "PE\0\0"
+            {
+                Log.LogError("SetPeStackReserve: " + Path + " is not a PE file.");
+                return false;
+            }
+
+            var optionalHeader = peOffset + 4 + 20;              // after signature + COFF header
+            fs.Position = optionalHeader;
+            var magic = reader.ReadUInt16();
+            fs.Position = optionalHeader + 72;                   // SizeOfStackReserve, same offset in both
+            if (magic == 0x20B)                                  // PE32+
+            {
+                var old = reader.ReadUInt64();
+                fs.Position = optionalHeader + 72;
+                writer.Write((ulong)StackReserve);
+                Log.LogMessage(MessageImportance.High, "SetPeStackReserve: " + System.IO.Path.GetFileName(Path) + " stack reserve 0x" + old.ToString("X") + " -> 0x" + StackReserve.ToString("X") + " (no editbin)");
+            }
+            else if (magic == 0x10B)                             // PE32
+            {
+                var old = reader.ReadUInt32();
+                fs.Position = optionalHeader + 72;
+                writer.Write((uint)StackReserve);
+                Log.LogMessage(MessageImportance.High, "SetPeStackReserve: " + System.IO.Path.GetFileName(Path) + " stack reserve 0x" + old.ToString("X") + " -> 0x" + StackReserve.ToString("X") + " (no editbin)");
+            }
+            else
+            {
+                Log.LogError("SetPeStackReserve: unknown PE optional header magic 0x" + magic.ToString("X") + " in " + Path + ".");
+                return false;
+            }
+        }
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="PublishApp" AfterTargets="AfterBuild" Condition="'$(_AssemblyTimestampBeforeCompile)' != '$(_AssemblyTimestampAfterCompile)' and '$(IsPublishing)' != 'True'">
+    <Message Text="Publishing CefGlue.BrowserProcess on Windows ($(Platform))..." Importance="High" />
+    <MSBuild Projects="CefGlue.BrowserProcess.csproj" Targets="Publish" Properties="$(PublishCommonConfig)win-$(ArchitectureConfig);IsEditbinEnabled=True;" />
+
+    <Message Text="Publishing CefGlue.BrowserProcess on Linux ($(Platform))..." Importance="High" />
+    <MSBuild Projects="CefGlue.BrowserProcess.csproj" Targets="Publish" Properties="$(PublishCommonConfig)linux-$(ArchitectureConfig);IsEditbinEnabled=False;" />
+
+    <Message Text="Publishing CefGlue.BrowserProcess on MacOS ($(Platform))..." Importance="High" />
+    <MSBuild Projects="CefGlue.BrowserProcess.csproj" Targets="Publish" Properties="$(PublishCommonConfig)osx-$(ArchitectureConfig);IsEditbinEnabled=False;" />
+  </Target>
+</Project>

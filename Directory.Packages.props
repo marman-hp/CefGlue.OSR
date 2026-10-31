@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <PackageReference>
+      <PrivateAssets>$(PrivateAssets);compile</PrivateAssets>
+    </PackageReference>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <PackageVersion Include="Avalonia" Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="Avalonia.Desktop" Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="Avalonia.Skia" Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="Avalonia.Themes.Simple" Version="$(AvaloniaVersion)" />
+    <PackageVersion Include="Dotnet.Bundle" Version="0.9.13" />
+    <PackageVersion Include="GirCore.Gtk-4.0" Version="0.8.1" />
+    <PackageVersion Include="Microsoft.WindowsAppSDK" Version="2.3.1" />
+    <PackageVersion Include="Silk.NET.Core" Version="2.17.0" />
+    <PackageVersion Include="Silk.NET.Direct3D11" Version="2.17.0" />
+    <PackageVersion Include="Silk.NET.DXGI" Version="2.17.0" />
+    <PackageVersion Include="Silk.NET.OpenGL" Version="2.17.0" />
+    <PackageVersion Include="Silk.NET.WGL" Version="2.17.0" />
+    <PackageVersion Include="Silk.NET.WGL.Extensions.NV" Version="2.17.0" />
+    <PackageVersion Include="System.Text.Json" Version="8.0.5" />
+    <PackageVersion Include="System.Diagnostics.PerformanceCounter" Version="8.0.1" />
+    <PackageVersion Include="System.Drawing.Common" Version="8.0.0" />
+    <PackageVersion Include="SkiaSharp" Version="2.88.8" />
+    <PackageVersion Include="System.Runtime.Loader" Version="4.3.0" />
+    <PackageVersion Include="nunit" Version="3.14.0" />
+    <PackageVersion Include="NUnit3TestAdapter" Version="4.6.0" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="Moq" Version="4.20.72" />
+    <PackageVersion Include="System.Data.DataSetExtensions" Version="4.5.0" />
+    <PackageVersion Include="Microsoft.Windows.Compatibility" Version="6.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,24 @@
+namespace Xilium.CefGlue.Interop
+{
+    using System;
+    using System.Runtime.InteropServices;
+    using System.Diagnostics.CodeAnalysis;
+
+    internal static unsafe partial class libcef
+    {
+        public const string CEF_VERSION = "154.0.33+ga03e714+chromium-154.0.8037.94";
+        public const int CEF_VERSION_MAJOR = 154;
+        public const int CEF_COMMIT_NUMBER = 3632;
+        public const string CEF_COMMIT_HASH = "a03e7146331fc5bd72784591e82df01e8007e17b";
+
+        public const int CHROME_VERSION_MAJOR = 154;
+        public const int CHROME_VERSION_MINOR = 0;
+        public const int CHROME_VERSION_BUILD = 8037;
+        public const int CHROME_VERSION_PATCH = 94;
+
+        public const int CEF_API_VERSION = 15400;
+        public const string CEF_API_HASH_PLATFORM_WIN = "726dc73763db22edb289e41af2421a232617f7f4";
+        public const string CEF_API_HASH_PLATFORM_MACOS = "e5cd28047fc1f8bbb972e54692fc665040c7f034";
+        public const string CEF_API_HASH_PLATFORM_LINUX = "5c8344ae7d7f6421bc801401e35d4dbf6d38e101";
+    }
+}

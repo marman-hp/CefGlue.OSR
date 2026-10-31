@@ -1,0 +1,81 @@
+<Project>
+    <PropertyGroup>
+        <CefGlueBrowserProcessDir>CefGlueBrowserProcess</CefGlueBrowserProcessDir>
+    </PropertyGroup>
+
+    <ItemGroup Condition="'$(CefGlueTargetPlatform)' == 'osx-x64' OR '$(CefGlueTargetPlatform)' == 'osx-arm64'">
+        <None Condition="'$(CefGlueTargetPlatform)' == 'osx-x64'" Include="@(CefRedistOSX64)">
+            <Visible>false</Visible>
+            <Link>$(OutputDirectory)%(RecursiveDir)%(FileName)%(Extension)</Link>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+            <PublishState>Included</PublishState>
+        </None>
+        <None Condition="'$(CefGlueTargetPlatform)' == 'osx-arm64'" Include="@(CefRedistOSXARM64)">
+            <Visible>false</Visible>
+            <Link>$(OutputDirectory)%(RecursiveDir)%(FileName)%(Extension)</Link>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+            <PublishState>Included</PublishState>
+        </None>
+        <None Include="$(OutDir)\libEGL.dylib">
+            <Visible>false</Visible>
+            <Link>$(OutputDirectory)$(CefGlueBrowserProcessDir)\%(RecursiveDir)%(FileName)%(Extension)</Link>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+            <PublishState>Included</PublishState>
+        </None>
+        <None Include="$(OutDir)\libGLESv2.dylib">
+            <Visible>false</Visible>
+            <Link>$(OutputDirectory)$(CefGlueBrowserProcessDir)\%(RecursiveDir)%(FileName)%(Extension)</Link>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+            <PublishState>Included</PublishState>
+        </None>
+        <None Include="$(OutDir)\libvk_swiftshader.dylib">
+            <Visible>false</Visible>
+            <Link>$(OutputDirectory)$(CefGlueBrowserProcessDir)\%(RecursiveDir)%(FileName)%(Extension)</Link>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+            <PublishState>Included</PublishState>
+        </None>
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(CefGlueTargetPlatform)' == 'linux-x64' OR '$(CefGlueTargetPlatform)' == 'linux-arm64'">
+        <None Condition="'$(CefGlueTargetPlatform)' == 'linux-x64'" Include="@(CefRedistLinux64)">
+            <Visible>false</Visible>
+            <Link>$(OutputDirectory)$(CefGlueBrowserProcessDir)\%(RecursiveDir)%(FileName)%(Extension)</Link>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+            <PublishState>Included</PublishState>
+        </None>
+        <None Condition="'$(CefGlueTargetPlatform)' == 'linux-arm64'" Include="@(CefRedistLinuxARM64)">
+            <Visible>false</Visible>
+            <Link>$(OutputDirectory)$(CefGlueBrowserProcessDir)\%(RecursiveDir)%(FileName)%(Extension)</Link>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+            <PublishState>Included</PublishState>
+        </None>
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="@(CefGlueBrowserProcessFiles)">
+            <Visible>false</Visible>
+            <Link>$(OutputDirectory)$(CefGlueBrowserProcessDir)\%(RecursiveDir)%(FileName)%(Extension)</Link>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+            <PublishState>Included</PublishState>
+        </None>
+    </ItemGroup>
+
+    <Target Name="CopyCefGlueBrowserProcessAfterBuild" AfterTargets="Build" Condition="'$(CefGlueTargetPlatform)' != '' or '$(RuntimeIdentifier)' != ''">
+        <ItemGroup>
+            <_CefGlueBrowserProcessFresh Condition="'$(RuntimeIdentifier)' == ''" Include="$(BrowserProcessDir)\$(CefGlueTargetPlatform)\publish\**\*" />
+            <_CefGlueBrowserProcessFresh Condition="'$(RuntimeIdentifier)' != ''" Include="$(BrowserProcessDir)\$(RuntimeIdentifier)\publish\**\*" />
+        </ItemGroup>
+        <Copy SourceFiles="@(_CefGlueBrowserProcessFresh)"
+              DestinationFiles="@(_CefGlueBrowserProcessFresh->'$(OutDir)$(CefGlueBrowserProcessDir)\%(RecursiveDir)%(Filename)%(Extension)')"
+              SkipUnchangedFiles="true" />
+    </Target>
+
+</Project>

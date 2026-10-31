@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+	  <OutputType>WinExe</OutputType>
+	  <TargetFramework>$(DotnetVersion)-windows</TargetFramework>
+	  <AssemblyName>Xilium.CefGlue.Demo.WinForms</AssemblyName>
+	  <RootNamespace>Xilium.CefGlue.Demo.WinForms</RootNamespace>
+	  <UseWindowsForms>true</UseWindowsForms>
+	  <StartupObject>Xilium.CefGlue.Demo.WinForms.Program</StartupObject>
+	  <EnableWindowsTargeting>true</EnableWindowsTargeting>
+	  <ApplicationManifest>app.manifest</ApplicationManifest>
+	  <Authors>Marman-HP</Authors>
+	  <Copyright>Copyright © 2026 Marman-HP. Portions Copyright © XiliumHQ 2021, OutSystems 2021.</Copyright>
+  </PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)' == 'Debug_WindowlessRender'">
+		<DebugType />
+		<DefineConstants>$(DefineConstants);WINDOWLESS</DefineConstants>
+	</PropertyGroup>
+
+	<Import Project="$(ProjectDir)..\CefGlue.CopyLocal.props" />
+
+	<ItemGroup>
+		<ProjectReference Include="..\CefGlue.WinForms\CefGlue.WinForms.csproj" />
+		<ProjectReference Include="..\CefGlue\CefGlue.csproj" />
+		<ProjectReference Include="..\CefGlue.Common\CefGlue.Common.csproj" />
+		<ProjectReference Include="..\CefGlue.Common.Shared\CefGlue.Common.Shared.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Include="..\cef\runtimes\win-x64\native\**">
+			<Link>runtimes\win-x64\native\%(RecursiveDir)%(Filename)%(Extension)</Link>
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<Visible>false</Visible>
+		</None>
+	</ItemGroup>
+
+	<Import Project="$(ProjectDir)..\CefGlue.Common\build\CefGlue.Common.targets" />
+
+</Project>

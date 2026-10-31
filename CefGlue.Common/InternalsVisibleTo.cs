@@ -1,0 +1,12 @@
+﻿using System.Runtime.CompilerServices;
+[assembly: InternalsVisibleTo("Xilium.CefGlue.Avalonia")]
+[assembly: InternalsVisibleTo("Xilium.CefGlue.WPF")]
+[assembly: InternalsVisibleTo("Xilium.CefGlue.WinForms")]
+[assembly: InternalsVisibleTo("Xilium.CefGlue.GTK")]
+[assembly: InternalsVisibleTo("Xilium.CefGlue.X11")]
+[assembly: InternalsVisibleTo("Xilium.CefGlue.WinUI")]
+[assembly: InternalsVisibleTo("Xilium.CefGlue.Headless")]
+[assembly: InternalsVisibleTo("Xilium.CefGlue.OffScreen")]
+[assembly: InternalsVisibleTo("Xilium.CefGlue.BrowserProcess")]
+[assembly: InternalsVisibleTo("CefGlue.Tests")]
+[assembly: InternalsVisibleTo("DynamicProxyGenAssembly2")]

@@ -1,0 +1,33 @@
+<UserControl x:Class="Xilium.CefGlue.Demo.WPF.BrowserTabView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <DockPanel LastChildFill="True">
+        <DockPanel DockPanel.Dock="Top">
+            <TextBox x:Name="addressBar" KeyDown="OnAddressBarKeyDown" />
+        </DockPanel>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition x:Name="devToolsSplitterRow" Height="0" />
+                <RowDefinition x:Name="devToolsRow" Height="0" />
+            </Grid.RowDefinitions>
+
+            <Grid x:Name="browserContainer" Grid.Row="0" />
+
+            <GridSplitter x:Name="devToolsSplitter" Grid.Row="1" Height="5" HorizontalAlignment="Stretch"
+                          ResizeDirection="Rows" Background="LightGray" Visibility="Collapsed" />
+
+            <DockPanel x:Name="devtoolControl" Grid.Row="2" LastChildFill="True">
+                <Border DockPanel.Dock="Top" Background="#FFE8E8E8">
+                    <DockPanel LastChildFill="False" Margin="4,2,4,2">
+                        <TextBlock Text="DevTools" VerticalAlignment="Center" FontWeight="Bold" />
+                        <Button DockPanel.Dock="Right" Content="X" Padding="6,0,6,0"
+                                Click="OnCloseDevToolsClick" />
+                    </DockPanel>
+                </Border>
+                <Grid x:Name="devToolsContentHost" />
+            </DockPanel>
+        </Grid>
+    </DockPanel>
+</UserControl>

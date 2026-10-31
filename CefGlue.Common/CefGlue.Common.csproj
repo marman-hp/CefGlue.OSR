@@ -1,0 +1,70 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="..\CefGlue.Packages.props" />
+
+    <PropertyGroup>
+        <TargetFramework>$(DotnetVersion)</TargetFramework>
+        <AssemblyName>Xilium.CefGlue.Common</AssemblyName>
+        <RootNamespace>Xilium.CefGlue.Common</RootNamespace>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <PackageId>CefGlue.OSR.Common$(PackageSuffix)</PackageId>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);CopyProjectReferencesToPackage</TargetsForTfmSpecificBuildOutput>
+        <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
+        <NoWarn>$(NoWarn);CA1416</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Compile Remove="BaseCefBrowser.cs" />
+        <Compile Remove="CommonBrowserBehaviors.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="BaseCefBrowser.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\CefGlue.Common.Shared\CefGlue.Common.Shared.csproj">
+            <ReferenceOutputAssembly>true</ReferenceOutputAssembly>
+            <IncludeAssets>CefGlue.Common.Shared.dll</IncludeAssets>
+        </ProjectReference>
+
+        <ProjectReference Include="..\CefGlue\CefGlue.csproj">
+            <ReferenceOutputAssembly>true</ReferenceOutputAssembly>
+            <IncludeAssets>CefGlue.dll</IncludeAssets>
+        </ProjectReference>
+
+        <ProjectReference Include="..\CefGlue.BrowserProcess\CefGlue.BrowserProcess.csproj">
+            <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+            <PrivateAssets>all</PrivateAssets>
+        </ProjectReference>
+
+        <None Include="build\CefGlue.Common.props" Pack="True" PackagePath="build\$(PackageId).props" />
+        <None Include="build\CefGlue.Common.targets" Pack="True" PackagePath="build\$(PackageId).targets" />
+        <None Include="build\CefGlue.Common.props" Pack="True" PackagePath="buildTransitive\$(PackageId).props" />
+        <None Include="build\CefGlue.Common.targets" Pack="True" PackagePath="buildTransitive\$(PackageId).targets" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="System.Diagnostics.PerformanceCounter" />
+      <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    </ItemGroup>
+
+    <Target DependsOnTargets="ResolveReferences" Name="CopyProjectReferencesToPackage">
+        <ItemGroup>
+            <BuildOutputInPackage Include="@(ReferenceCopyLocalPaths-&gt;WithMetadataValue('ReferenceSourceTarget', 'ProjectReference'))" />
+
+            <TfmSpecificPackageFile Include="..\CefGlue.BrowserProcess\bin\$(Platform)\$(Configuration)\$(DotnetVersion)\win-$(ArchitectureConfig)\publish\**\*">
+                <PackagePath>bin\win-$(ArchitectureConfig)</PackagePath>
+            </TfmSpecificPackageFile>
+
+            <TfmSpecificPackageFile Include="..\CefGlue.BrowserProcess\bin\$(Platform)\$(Configuration)\$(DotnetVersion)\linux-$(ArchitectureConfig)\publish\**\*">
+                <PackagePath>bin\linux-$(ArchitectureConfig)</PackagePath>
+            </TfmSpecificPackageFile>
+
+            <TfmSpecificPackageFile Include="..\CefGlue.BrowserProcess\bin\$(Platform)\$(Configuration)\$(DotnetVersion)\osx-$(ArchitectureConfig)\publish\**\*">
+                <PackagePath>bin\osx-$(ArchitectureConfig)</PackagePath>
+            </TfmSpecificPackageFile>
+        </ItemGroup>
+    </Target>
+
+</Project>

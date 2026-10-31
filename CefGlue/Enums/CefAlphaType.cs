@@ -1,0 +1,25 @@
+﻿namespace Xilium.CefGlue
+{
+    using System;
+
+    /// <summary>
+    /// Describes how to interpret the alpha component of a pixel.
+    /// </summary>
+    public enum CefAlphaType
+    {
+        /// <summary>
+        /// No transparency. The alpha component is ignored.
+        /// </summary>
+        Opaque,
+
+        /// <summary>
+        /// Transparency with pre-multiplied alpha component.
+        /// </summary>
+        Premultiplied,
+
+        /// <summary>
+        /// Transparency with post-multiplied alpha component.
+        /// </summary>
+        Postmultiplied,
+    }
+}

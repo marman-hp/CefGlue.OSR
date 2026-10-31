@@ -1,0 +1,18 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Xilium.CefGlue.Demo.Avalonia.MainWindow"
+        Title="CefGlue.Avalonia Demo"
+        Width="1024" Height="768">
+
+    <Grid RowDefinitions="Auto,*">
+        <StackPanel x:Name="Toolbar" Orientation="Horizontal" Grid.Row="0" Margin="6" Spacing="6">
+            <TextBox x:Name="AddressTextBox" Width="600" KeyDown="OnAddressTextBoxKeyDown" />
+            <Button Content="Go" Click="OnGoButtonClick" />
+            <Button Content="Reload" Click="OnReloadButtonClick" />
+            <Button Content="DevTools" Click="OnOpenDevToolsButtonClick" />
+        </StackPanel>
+
+        <Grid x:Name="BrowserContainer" Grid.Row="1" />
+    </Grid>
+
+</Window>

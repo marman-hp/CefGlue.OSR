@@ -1,0 +1,43 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Xilium.CefGlue.Demo.Avalonia.BrowserTabView">
+
+    <Grid x:Name="RootGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="0"/>
+            <RowDefinition Height="0"/>
+        </Grid.RowDefinitions>
+
+        <TextBox x:Name="AddressBar" Grid.Row="0" Margin="4" KeyDown="OnAddressBarKeyDown"/>
+
+        <!-- Direct child, no ScrollViewer/ZoomHost wrapper - mirrors CefGlue.Demo.WPF's identical
+             browserContainer now that CDP device emulation is gone (see BrowserTabView.axaml.cs's
+             own remarks for why it was removed). -->
+        <Grid x:Name="BrowserContainer" Grid.Row="1"/>
+
+        <!-- Real Avalonia GridSplitter (unlike CefGlue.Demo.WinUI, which had to hand-roll CursorGrid
+             since this WindowsAppSDK version ships no native GridSplitter) - mirrors CefGlue.Demo.
+             WPF's identical devToolsSplitter. -->
+        <GridSplitter x:Name="DevToolsSplitter" Grid.Row="2" Height="5" HorizontalAlignment="Stretch"
+                      ResizeDirection="Rows" Background="LightGray" IsVisible="False"/>
+
+        <!-- Hosts the DevTools OSR control once Browser.ShowDevToolOSR creates it - see
+             OpenDevTools's own remarks. Starts at Height="0" (DevToolsRow above, alongside
+             DevToolsSplitterRow) so it takes no space until DevTools is actually opened. -->
+        <Grid x:Name="DevToolsPanel" Grid.Row="3">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <Border Grid.Row="0" Background="#FFE8E8E8">
+                <Grid ColumnDefinitions="*,Auto" Margin="4,2,4,2">
+                    <TextBlock Grid.Column="0" Text="DevTools" VerticalAlignment="Center" FontWeight="Bold"/>
+                    <Button Grid.Column="1" Content="X" Padding="6,0,6,0" Click="OnCloseDevToolsClick"/>
+                </Grid>
+            </Border>
+            <Grid x:Name="DevToolsContentHost" Grid.Row="1"/>
+        </Grid>
+    </Grid>
+</UserControl>

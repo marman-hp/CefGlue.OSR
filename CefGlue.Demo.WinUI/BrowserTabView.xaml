@@ -1,0 +1,44 @@
+<UserControl
+    x:Class="Xilium.CefGlue.Demo.WinUI.BrowserTabView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Xilium.CefGlue.Demo.WinUI">
+
+    <Grid x:Name="RootGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition x:Name="DevToolsSplitterRow" Height="0"/>
+            <RowDefinition x:Name="DevToolsRow" Height="0"/>
+        </Grid.RowDefinitions>
+
+        <TextBox x:Name="AddressBar" Grid.Row="0" Margin="4" KeyDown="OnAddressBarKeyDown"/>
+
+        <Grid x:Name="BrowserContainer" Grid.Row="1"/>
+
+        <local:CursorGrid x:Name="DevToolsSplitter" Grid.Row="2" Height="5" HorizontalAlignment="Stretch"
+                          Background="LightGray" Visibility="Collapsed"
+                          HoverCursorShape="SizeNorthSouth"
+                          PointerPressed="OnDevToolsSplitterPointerPressed"
+                          PointerMoved="OnDevToolsSplitterPointerMoved"
+                          PointerReleased="OnDevToolsSplitterPointerReleased"/>
+
+        <Grid x:Name="DevToolsPanel" Grid.Row="3">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <Border Grid.Row="0" Background="#FFE8E8E8">
+                <Grid Margin="4,2,4,2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="DevTools" VerticalAlignment="Center" FontWeight="Bold"/>
+                    <Button Grid.Column="1" Content="X" Padding="6,0,6,0" Click="OnCloseDevToolsClick"/>
+                </Grid>
+            </Border>
+            <Grid x:Name="DevToolsContentHost" Grid.Row="1"/>
+        </Grid>
+    </Grid>
+</UserControl>

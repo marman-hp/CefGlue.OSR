@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>$(DotnetVersion)</TargetFramework>
+    <AssemblyName>Xilium.CefGlue.Demo.Avalonia</AssemblyName>
+    <RootNamespace>Xilium.CefGlue.Demo.Avalonia</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Simple" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <Import Project="$(ProjectDir)..\CefGlue.CopyLocal.props" />
+
+  <ItemGroup>
+    <ProjectReference Include="..\CefGlue.Avalonia\CefGlue.Avalonia.csproj" />
+    <ProjectReference Include="..\CefGlue\CefGlue.csproj" />
+    <ProjectReference Include="..\CefGlue.Common\CefGlue.Common.csproj" />
+    <ProjectReference Include="..\CefGlue.Common.Shared\CefGlue.Common.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\cef\runtimes\win-x64\native\**">
+      <Link>runtimes\win-x64\native\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </None>
+  </ItemGroup>
+
+  <Import Project="$(ProjectDir)..\CefGlue.Common\build\CefGlue.Common.targets" />
+
+</Project>
