@@ -65,17 +65,9 @@ namespace Xilium.CefGlue.Common
 
         internal virtual CefGlueAdapter CreateBrowserAdapter(Func<CefRequestContext> cefRequestContextFactory)
         {
-            if (CefRuntimeLoader.IsOSREnabled)
-            {
-                var target = _attachedTarget ?? CreateOffScreenControlHost();
+            var target = _attachedTarget ?? CreateOffScreenControlHost();
 
-                return new CefGlueOffScreenAdapter(this, nameof(BaseCefBrowser), target, CreatePopupHost(), _logger, _host, cefRequestContextFactory?.Invoke());
-            }
-            else
-            {
-                var target = _attachedTarget ?? CreateControl();
-                return new CefGlueAdapter(this, nameof(BaseCefBrowser), target, _logger, _host, cefRequestContextFactory?.Invoke());
-            }
+            return new CefGlueOffScreenAdapter(this, nameof(BaseCefBrowser), target, CreatePopupHost(), _logger, _host, cefRequestContextFactory?.Invoke());
         }
 
         ~BaseCefBrowser()
@@ -99,8 +91,6 @@ namespace Xilium.CefGlue.Common
         internal CefGlueAdapter Adapter => _adapter;
 
         protected internal abstract IOffScreenPopupHost CreatePopupHost();
-
-        protected internal abstract ITarget CreateControl();
 
         protected internal abstract IOffScreenTargetHost CreateOffScreenControlHost();
 

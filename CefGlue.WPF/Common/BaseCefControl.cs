@@ -40,8 +40,6 @@ namespace Xilium.CefGlue.WPF.Common
 
         public void AttachBrowser(CefBrowser browser) => _browser = browser;
 
-        public bool OSREnabled => CefRuntimeLoader.IsOSREnabled;
-
         protected BaseCefControl()
         {
             Loaded += OnLoaded;

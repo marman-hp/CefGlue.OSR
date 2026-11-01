@@ -291,9 +291,9 @@ namespace Xilium.CefGlue.Demo.WinForms
                 }
             });
 
-            var b = new BitmapControl { Dock = DockStyle.Fill };
+            var b = browser.Control;
+            b.Dock = DockStyle.Fill;
 
-            browser.AttachTarget(b);
             browser.ShowOverlayInfo = _showOverlayInfoMenuItem.Checked;
             browserPanel.Controls.Add(browser.Control);
 
@@ -355,12 +355,21 @@ namespace Xilium.CefGlue.Demo.WinForms
 
                 RunOnUiThread(() =>
                 {
-                    tab.LastStatus = "Done";
+                    tab.LastStatus = $"Done · {browser.RenderMode}";
                     if (ActiveTab == tab)
                     {
                         _statusLabel.Text = tab.LastStatus;
                     }
                 });
+            };
+
+            browser.RenderModeChanged += (mode, reason) =>
+            {
+                tab.LastStatus = $"Done · {mode}";
+                if (ActiveTab == tab)
+                {
+                    _statusLabel.Text = tab.LastStatus;
+                }
             };
 
             browser.TitleChanged += (s, title) =>
@@ -518,7 +527,7 @@ namespace Xilium.CefGlue.Demo.WinForms
             header.Controls.Add(headerLabel);
             header.Controls.Add(closeButton);
 
-            _devToolsSplitter = new Splitter { Dock = DockStyle.Bottom, Height = 4 };
+            _devToolsSplitter = new Splitter { Dock = DockStyle.Bottom, Height = 4, Visible = false };
 
             _devToolsPanel = new Panel { Dock = DockStyle.Bottom, Height = 0, Visible = false };
             _devToolsPanel.Controls.Add(_devToolsContentHost);

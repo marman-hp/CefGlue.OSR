@@ -32,6 +32,19 @@ namespace  Xilium.CefGlue.Demo.WinForms
             {
                 ["remote-allow-origins"] = "devtools://devtools",
             };
+
+            // Texture-fallback test hooks: CEFGLUE_DEMO_GPU_SWITCH=disable-gpu (or disable-gpu-compositing),
+            // CEFGLUE_DEMO_NO_TEXTURE_FALLBACK=1.
+            var gpuSwitch = Environment.GetEnvironmentVariable("CEFGLUE_DEMO_GPU_SWITCH")?.Trim();
+            if (!string.IsNullOrEmpty(gpuSwitch))
+            {
+                cefFlags[gpuSwitch] = null;
+            }
+            if (Environment.GetEnvironmentVariable("CEFGLUE_DEMO_NO_TEXTURE_FALLBACK")?.Trim() == "1")
+            {
+                Xilium.CefGlue.WinForms.CefGlueBrowser.AllowTextureFallback = false;
+            }
+
             CefRuntimeLoader.Initialize(settings, flags: cefFlags.ToArray());
             ApplicationConfiguration.Initialize();
 

@@ -87,7 +87,8 @@ namespace Xilium.CefGlue.Common
                 }
             };
 
-            IsOSREnabled = settings.WindowlessRenderingEnabled;
+            // CefGlue.OSR only does off-screen rendering; there is no windowed mode to fall back to.
+            settings.WindowlessRenderingEnabled = true;
 
             var exeFileName = Process.GetCurrentProcess().MainModule.FileName;
             if (string.IsNullOrEmpty(exeFileName))
@@ -136,8 +137,6 @@ namespace Xilium.CefGlue.Common
         }
 
         public static bool IsLoaded => CefRuntime.IsInitialized;
-
-        internal static bool IsOSREnabled { get; private set; }
 
         /// <summary>
         /// True when the browser process runs with --disable-gpu or --disable-gpu-compositing

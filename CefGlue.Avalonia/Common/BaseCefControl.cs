@@ -18,8 +18,6 @@ namespace Xilium.CefGlue.Avalonia.Common
 
         public void AttachBrowser(CefBrowser browser) => _browser = browser;
 
-        public bool OSREnabled => CefRuntimeLoader.IsOSREnabled;
-
         public virtual void FocusContent()
         {
             Focus();

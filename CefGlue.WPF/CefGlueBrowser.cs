@@ -12,6 +12,7 @@ using System.Windows.Interop;
 using Xilium.CefGlue.Common;
 using Xilium.CefGlue.Common.Composition;
 using Xilium.CefGlue.Common.Handlers;
+using Xilium.CefGlue.Common.Helpers;
 using Xilium.CefGlue.Common.Platform;
 using Xilium.CefGlue.WPF.Common;
 using Xilium.CefGlue.WPF.Platform;
@@ -35,7 +36,74 @@ namespace Xilium.CefGlue.WPF
             _setupCefWindowInfo = setupCefWindowInfo;
             _setupCefBrowserSettings = setupCefBrowserSettings;
 
+            var windowInfo = setupCefWindowInfo?.Invoke();
+            if (windowInfo?.SharedTextureEnabled == true)
+            {
+                _textureFallbackReason = ProbeSharedTextures();
+            }
+
+            if (_textureFallbackReason != null)
+            {
+                // The adapter calls the setup delegate again when it creates the browser; keep CEF on
+                // plain OnPaint there instead of shared textures the bitmap path would have to read back.
+                _setupCefWindowInfo = () =>
+                {
+                    var info = setupCefWindowInfo();
+                    if (info != null)
+                    {
+                        info.SharedTextureEnabled = false;
+                    }
+                    return info;
+                };
+                _logger.Warn($"Shared-texture rendering not supported, using plain bitmap: {_textureFallbackReason}");
+            }
+
+            RenderMode = windowInfo?.SharedTextureEnabled == true && _textureFallbackReason == null
+                ? OsrRenderMode.BitmapReadback
+                : OsrRenderMode.Bitmap;
+            RenderModeReason = _textureFallbackReason;
+
             AttachTarget(ResolveControl());
+        }
+
+        /// <summary>
+        /// When true (default), a browser asking for shared-texture rendering (BitmapReadback) falls back to plain
+        /// Bitmap if the GPU can't do it, instead of rendering nothing. Read when each browser is created.
+        /// </summary>
+        public static bool AllowTextureFallback { get; set; } = true;
+
+        /// <summary>
+        /// How this browser's frames currently reach the screen: <see cref="OsrRenderMode.Bitmap"/> or
+        /// <see cref="OsrRenderMode.BitmapReadback"/> (WPF has no zero-copy texture control).
+        /// </summary>
+        public OsrRenderMode RenderMode { get; private set; }
+
+        /// <summary>Why <see cref="RenderMode"/> isn't what was asked for; null when it is.</summary>
+        public string RenderModeReason { get; private set; }
+
+        /// <summary>
+        /// Raised on the UI thread when the render mode changes after creation (BitmapReadback → Bitmap when CEF
+        /// turns out to paint in software). A fallback decided at creation is only visible through <see cref="RenderMode"/>.
+        /// </summary>
+        public event Action<OsrRenderMode, string> RenderModeChanged;
+
+        private readonly string _textureFallbackReason;
+
+        /// <summary>
+        /// BitmapReadback opens CEF's shared texture on our own D3D11 device; without one every frame would fail
+        /// and the control would stay blank. Returns null when shared textures can be used.
+        /// </summary>
+        private static string ProbeSharedTextures()
+        {
+            var unsupportedReason = AllowTextureFallback ? SharedTextureSupport.GetUnsupportedReason() : null;
+#if DEBUG
+            // Test hook: keep BitmapReadback even when the probe would refuse it.
+            if (Environment.GetEnvironmentVariable("CEFGLUE_DEBUG_SKIP_TEXTURE_PROBE")?.Trim() == "1")
+            {
+                unsupportedReason = null;
+            }
+#endif
+            return unsupportedReason;
         }
 
         public new T AttachTarget<T>(T target) where T : BaseCefControl
@@ -50,17 +118,15 @@ namespace Xilium.CefGlue.WPF
                 throw new InvalidOperationException("AttachTarget can only be called before the browser has been created - this CefGlueBrowser is already attached and initialized.");
             }
 
+            if (target is not BitmapControl)
+            {
+                throw new ArgumentException($"CefGlue.OSR renders off-screen only and needs a {nameof(BitmapControl)}, not {target.GetType().Name}.", nameof(target));
+            }
+
             _activeControl = target;
             KeyboardNavigation.SetAcceptsReturn(_activeControl, true);
 
-            if (CefRuntimeLoader.IsOSREnabled)
-            {
-                base.AttachTarget(CreateOffScreenControlHost());
-            }
-            else
-            {
-                BuildAdapter();
-            }
+            base.AttachTarget(CreateOffScreenControlHost());
 
             Adapter.SetupCefWindowInfo = _setupCefWindowInfo;
             Adapter.SetupCefBrowserSettings = _setupCefBrowserSettings;
@@ -74,11 +140,6 @@ namespace Xilium.CefGlue.WPF
 
         protected virtual BaseCefControl ResolveControl()
         {
-            if (!CefRuntimeLoader.IsOSREnabled)
-            {
-                return new DefaultControl();
-            }
-
             var bitmapControl = new BitmapControl();
 
             bitmapControl.UseSafeResize = true;
@@ -117,13 +178,39 @@ namespace Xilium.CefGlue.WPF
             }
         }
 
-        protected internal override ITarget CreateControl() => new CefControl<DefaultControl>((DefaultControl)_activeControl);
-
         protected internal override IOffScreenTargetHost CreateOffScreenControlHost()
         {
             var host = new OffScreenControlHost<BitmapControl, byte[]>((BitmapControl)_activeControl);
             _surface = new WpfBitmapSurface { UseOSRDirtyRect = UseOSRDirtyRect, ShowOverlayInfo = _showOverlayInfo };
             host.AttachSurface(_surface);
+
+            if (RenderMode == OsrRenderMode.BitmapReadback)
+            {
+                // The probe can't see Chromium's GPU blocklist (e.g. VMware SVGA 3D passes our D3D11 check, yet CEF
+                // composites in software). Rendering still works - BitmapControl takes OnPaint too - but report it.
+                var renderSurface = host.RenderSurface;
+                var dispatcher = _activeControl.Dispatcher;
+                void OnFrameAccepted(int width, int height)
+                {
+                    if (renderSurface.IsAccelerated)
+                    {
+                        return;
+                    }
+
+                    renderSurface.FrameAccepted -= OnFrameAccepted;
+                    const string Reason = "CEF is painting in software (OnPaint): GPU compositing is unavailable or blocklisted.";
+                    _logger.Warn($"Shared textures requested but not used: {Reason}");
+
+                    dispatcher.BeginInvoke((Action)(() =>
+                    {
+                        RenderMode = OsrRenderMode.Bitmap;
+                        RenderModeReason = Reason;
+                        RenderModeChanged?.Invoke(RenderMode, Reason);
+                    }));
+                }
+                renderSurface.FrameAccepted += OnFrameAccepted;
+            }
+
             return host;
         }
 

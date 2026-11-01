@@ -28,8 +28,6 @@ namespace Xilium.CefGlue.WinUI.Common
 
         public void AttachBrowser(CefBrowser browser) => _browser = browser;
 
-        public bool OSREnabled => CefRuntimeLoader.IsOSREnabled;
-
         public void ApplyCursor(InputCursor cursor)
         {
             ProtectedCursor = cursor;

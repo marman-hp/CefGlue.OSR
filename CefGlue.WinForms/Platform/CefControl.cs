@@ -13,8 +13,6 @@ namespace Xilium.CefGlue.WinForms.Platform
     {
         protected readonly TControl _control;
 
-        private IntPtr _browserHandle;
-
         private ContextMenuStrip _contextMenu;
 
         public event Action GotFocus;
@@ -34,7 +32,6 @@ namespace Xilium.CefGlue.WinForms.Platform
               _control.Resize += Control_Resize;
 
             _control.Move += _control_Move;
-            _control.HandleDestroyed += Control_HandleDestroyed;
 
         }
 
@@ -62,42 +59,13 @@ namespace Xilium.CefGlue.WinForms.Platform
             return handle;
         }
 
-        public virtual void InitializeRender( IntPtr browserHandle)
+        // Off-screen browsers have no native child window to parent or destroy.
+        public void InitializeRender(IntPtr browserHandle)
         {
-            _browserHandle = browserHandle;
-
-            if (_browserHandle != nint.Zero)
-            {
-                _control.BeginInvoke(()=> {
-                    _control.CreateControl();
-                    NativeMethods.SetParent(browserHandle, _control.Handle);
-                    NativeMethods.ShowWindow(browserHandle, 5);
-                });
-
-            }
         }
 
-        public virtual void DestroyRender()
+        public void DestroyRender()
         {
-            if (_browserHandle == IntPtr.Zero)
-                return;
-
-            if (_control.InvokeRequired)
-            {
-                _control.Invoke(new MethodInvoker(DestroyRender));
-
-                return;
-            }
-
-            try
-            {
-                NativeMethods.DestroyWindow(_browserHandle);
-            }
-            catch
-            {
-            }
-
-            _browserHandle = IntPtr.Zero;
         }
 
         private readonly object _menuLock = new object();
@@ -194,8 +162,6 @@ namespace Xilium.CefGlue.WinForms.Platform
 
             SizeChanged?.Invoke(new CefSize(_control.Width, _control.Height));
 
-            ResizeBrowser();
-
             if (_control.UseSafeResize)
             {
                 _control.Focus();
@@ -208,22 +174,6 @@ namespace Xilium.CefGlue.WinForms.Platform
             {
                 _control.Browser?.GetHost()?.NotifyMoveOrResizeStarted();
             }
-        }
-
-        private void Control_HandleDestroyed(object sender, EventArgs e)
-        {
-            DestroyRender();
-        }
-
-        protected virtual void ResizeBrowser()
-        {
-
-            if (_browserHandle == IntPtr.Zero )
-            {
-                return;
-            }
-
-            NativeMethods.SetWindowPos( _browserHandle, IntPtr.Zero,0,0, _control.Width, _control.Height,  0x0040);
         }
     }
 

@@ -31,13 +31,6 @@ namespace Xilium.CefGlue.WinUI
                               CefGlueHost host = null)
             : base(cefRequestContextFactory, host)
         {
-            if (!CefRuntimeLoader.IsOSREnabled)
-            {
-                throw new NotSupportedException(
-                    "CefGlue.WinUI only supports off-screen (windowless) rendering today - " +
-                    "windowed rendering isn't implemented yet (see CefGlueBrowser.CreateControl).");
-            }
-
             _setupCefWindowInfo = setupCefWindowInfo;
             _setupCefBrowserSettings = setupCefBrowserSettings;
 
@@ -119,14 +112,7 @@ namespace Xilium.CefGlue.WinUI
 
             _rootGrid.Children.Add(_activeControl);
 
-            if (CefRuntimeLoader.IsOSREnabled)
-            {
-                base.AttachTarget(CreateOffScreenControlHost());
-            }
-            else
-            {
-                BuildAdapter();
-            }
+            base.AttachTarget(CreateOffScreenControlHost());
 
             Adapter.SetupCefWindowInfo = _setupCefWindowInfo;
             Adapter.SetupCefBrowserSettings = _setupCefBrowserSettings;
@@ -171,10 +157,6 @@ namespace Xilium.CefGlue.WinUI
             _activeControl.Focus(FocusState.Programmatic);
             UnderlyingBrowser?.GetHost()?.SetFocus(true);
         }
-
-        protected internal override ITarget CreateControl() =>
-            throw new NotSupportedException(
-                "Windowed rendering isn't implemented for CefGlue.WinUI yet - off-screen only.");
 
         public void OverrideDeviceScaleFactor(float deviceScaleFactor)
         {

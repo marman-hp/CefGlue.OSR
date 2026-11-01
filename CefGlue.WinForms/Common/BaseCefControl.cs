@@ -50,8 +50,6 @@ namespace Xilium.CefGlue.WinForms.Common
 
         public CefBrowser Browser => _browser;
 
-        public bool OSREnabled => CefRuntimeLoader.IsOSREnabled;
-
         public void SetCursorHandler(IntPtr cursorHandler) => _currentCursorHandler= cursorHandler;
 
         public IntPtr CursorHandler => _currentCursorHandler;
@@ -93,18 +91,15 @@ namespace Xilium.CefGlue.WinForms.Common
 
         protected override bool IsInputKey(Keys keyData)
         {
-            if (OSREnabled)
+            switch (keyData & Keys.KeyCode)
             {
-                switch (keyData & Keys.KeyCode)
-                {
-                    case Keys.Tab:
-                    case Keys.Left:
-                    case Keys.Right:
-                    case Keys.Up:
-                    case Keys.Down:
-                    case Keys.Escape:
-                        return true;
-                }
+                case Keys.Tab:
+                case Keys.Left:
+                case Keys.Right:
+                case Keys.Up:
+                case Keys.Down:
+                case Keys.Escape:
+                    return true;
             }
 
             return base.IsInputKey(keyData);
@@ -112,18 +107,12 @@ namespace Xilium.CefGlue.WinForms.Common
 
         protected override void OnMouseDown(MouseEventArgs e)
         {
-            if (OSREnabled)
-                GenericMouseDown?.Invoke(this, e);
-            else
-                base.OnMouseDown(e);
+            GenericMouseDown?.Invoke(this, e);
         }
 
         protected override void OnMouseUp(MouseEventArgs e)
         {
-            if (OSREnabled)
-                GenericMouseUp?.Invoke(this, e);
-            else
-                base.OnMouseUp(e);
+            GenericMouseUp?.Invoke(this, e);
         }
 
     }

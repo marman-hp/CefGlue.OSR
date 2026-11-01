@@ -16,7 +16,6 @@ namespace Xilium.CefGlue.Avalonia.Platform
     {
         private static IPlatformHandle _hostWindowPlatformHandle;
 
-        private IHandleHolder _browserView;
 
         protected readonly TControl _control;
 
@@ -166,40 +165,13 @@ namespace Xilium.CefGlue.Avalonia.Platform
             return false;
         }
 
+        // Off-screen browsers have no native child window to host or destroy.
         public void InitializeRender(IntPtr browserHandle)
         {
-            _browserView = new HostWindow(browserHandle);
-
-            Dispatcher.UIThread.Post(() =>
-            {
-                var browserView = _browserView;
-                if (browserView != null)
-                {
-                    lock (browserView)
-                    {
-                        if (_browserView != null)
-                        {
-                            _control.Content = new ExtendedAvaloniaNativeControlHost(_browserView.Handle);
-                        }
-                    }
-                }
-            });
         }
 
         public void DestroyRender()
         {
-            var browserView = _browserView;
-            if (browserView != null)
-            {
-                lock (browserView)
-                {
-                    if (_browserView != null)
-                    {
-                        _browserView.Dispose();
-                        _browserView = null;
-                    }
-                }
-            }
         }
 
     }

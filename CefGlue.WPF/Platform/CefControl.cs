@@ -15,8 +15,6 @@ namespace Xilium.CefGlue.WPF.Platform
     {
         protected readonly TControl _control;
 
-        private ExtendedWpfNativeControlHost _nativeControl;
-
         public event Action GotFocus;
         public event Action<CefSize> SizeChanged;
 
@@ -163,28 +161,13 @@ namespace Xilium.CefGlue.WPF.Platform
             return false;
         }
 
+        // Off-screen browsers have no native child window to host or destroy.
         public void InitializeRender(IntPtr browserHandle)
         {
-            _control.Dispatcher.BeginInvoke(
-                DispatcherPriority.Input,
-                new Action(() =>
-                {
-                    _nativeControl = new ExtendedWpfNativeControlHost(browserHandle);
-                    _control.Content = _nativeControl;
-                })
-            );
         }
 
         public void DestroyRender()
         {
-            _nativeControl.DestroyWindow();
-            _control.Dispatcher.BeginInvoke(
-                DispatcherPriority.Normal,
-                new Action(() =>
-                {
-                    _nativeControl.Dispose();
-                })
-            );
         }
     }
 }

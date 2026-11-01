@@ -27,37 +27,33 @@ namespace Xilium.CefGlue.Common
                 {
                     commandLine.AppendSwitch("no-zygote");
                 }
-                if (CefRuntimeLoader.IsOSREnabled)
+                var disableGpu = string.Equals(Environment.GetEnvironmentVariable("CEFGLUE_DISABLE_GPU"), "1");
+                if (disableGpu)
                 {
-                    var disableGpu = string.Equals(Environment.GetEnvironmentVariable("CEFGLUE_DISABLE_GPU"), "1");
-                    if (disableGpu)
-                    {
-                        commandLine.AppendSwitch("disable-gpu");
-                        commandLine.AppendSwitch("disable-gpu-compositing");
-                        commandLine.AppendSwitch("enable-media-stream");
-                    }
-
-                    if (long.TryParse(Environment.GetEnvironmentVariable("CEFGLUE_DISK_CACHE_SIZE_BYTES"), out var diskCacheSizeBytes) && diskCacheSizeBytes > 0)
-                    {
-                        commandLine.AppendSwitch("disk-cache-size", diskCacheSizeBytes.ToString());
-                    }
-                    if (long.TryParse(Environment.GetEnvironmentVariable("CEFGLUE_MEDIA_CACHE_SIZE_BYTES"), out var mediaCacheSizeBytes) && mediaCacheSizeBytes > 0)
-                    {
-                        commandLine.AppendSwitch("media-cache-size", mediaCacheSizeBytes.ToString());
-                    }
-
-                    commandLine.AppendSwitch("disable-smooth-scrolling", "1");
-
-                    var disabledFeatures = new List<string> { "BackForwardCache" };
-                    if (CefRuntime.Platform == CefRuntimePlatform.Windows)
-                    {
-                        commandLine.AppendSwitch("disable-site-isolation-trials");
-                        disabledFeatures.Add("IsolateOrigins");
-                        disabledFeatures.Add("SitePerProcess");
-                    }
-                    commandLine.AppendSwitch("disable-features", string.Join(",", disabledFeatures));
-
+                    commandLine.AppendSwitch("disable-gpu");
+                    commandLine.AppendSwitch("disable-gpu-compositing");
+                    commandLine.AppendSwitch("enable-media-stream");
                 }
+
+                if (long.TryParse(Environment.GetEnvironmentVariable("CEFGLUE_DISK_CACHE_SIZE_BYTES"), out var diskCacheSizeBytes) && diskCacheSizeBytes > 0)
+                {
+                    commandLine.AppendSwitch("disk-cache-size", diskCacheSizeBytes.ToString());
+                }
+                if (long.TryParse(Environment.GetEnvironmentVariable("CEFGLUE_MEDIA_CACHE_SIZE_BYTES"), out var mediaCacheSizeBytes) && mediaCacheSizeBytes > 0)
+                {
+                    commandLine.AppendSwitch("media-cache-size", mediaCacheSizeBytes.ToString());
+                }
+
+                commandLine.AppendSwitch("disable-smooth-scrolling", "1");
+
+                var disabledFeatures = new List<string> { "BackForwardCache" };
+                if (CefRuntime.Platform == CefRuntimePlatform.Windows)
+                {
+                    commandLine.AppendSwitch("disable-site-isolation-trials");
+                    disabledFeatures.Add("IsolateOrigins");
+                    disabledFeatures.Add("SitePerProcess");
+                }
+                commandLine.AppendSwitch("disable-features", string.Join(",", disabledFeatures));
 
                 if (_flags != null)
                 {

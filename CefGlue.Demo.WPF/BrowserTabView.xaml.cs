@@ -56,6 +56,7 @@ namespace Xilium.CefGlue.Demo.WPF
             Browser.LifeSpanHandler = new BrowserLifeSpanHandler(Browser, openInNewTab);
             Browser.DevToolsOpened += OnBrowserDevToolsOpened;
             Browser.DevToolsClosed += OnBrowserDevToolsClosed;
+            Browser.RenderModeChanged += OnBrowserRenderModeChanged;
 
             Browser.Address = initialUrl ?? "https://google.com";
         }
@@ -141,9 +142,15 @@ namespace Xilium.CefGlue.Demo.WPF
 
             Dispatcher.BeginInvoke((Action)(() =>
             {
-                LastStatus = "Done";
+                LastStatus = $"Done · {Browser.RenderMode}";
                 StatusTextChanged?.Invoke(LastStatus);
             }));
+        }
+
+        private void OnBrowserRenderModeChanged(OsrRenderMode mode, string reason)
+        {
+            LastStatus = $"Done · {mode}";
+            StatusTextChanged?.Invoke(LastStatus);
         }
 
         private void OnAddressBarKeyDown(object sender, KeyEventArgs e)

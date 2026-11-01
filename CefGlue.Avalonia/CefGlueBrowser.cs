@@ -33,13 +33,6 @@ namespace Xilium.CefGlue.Avalonia
                               bool useTextureControl = false)
             : base(cefRequestContextFactory, host)
         {
-            if (!CefRuntimeLoader.IsOSREnabled)
-            {
-                throw new NotSupportedException(
-                    "CefGlue.Avalonia only supports off-screen (windowless) rendering in this port - " +
-                    "windowed rendering isn't implemented yet (see CefGlueBrowser.CreateControl).");
-            }
-
             _setupCefWindowInfo = setupCefWindowInfo;
             _setupCefBrowserSettings = setupCefBrowserSettings;
 
@@ -126,14 +119,7 @@ namespace Xilium.CefGlue.Avalonia
                 _rootGrid.Children.Add(textureControlWithOverlay.FpsOverlay);
             }
 
-            if (CefRuntimeLoader.IsOSREnabled)
-            {
-                base.AttachTarget(CreateOffScreenControlHost());
-            }
-            else
-            {
-                BuildAdapter();
-            }
+            base.AttachTarget(CreateOffScreenControlHost());
 
             Adapter.SetupCefWindowInfo = _setupCefWindowInfo;
             Adapter.SetupCefBrowserSettings = _setupCefBrowserSettings;
@@ -202,10 +188,6 @@ namespace Xilium.CefGlue.Avalonia
                 }
             }
         }
-
-        protected internal override ITarget CreateControl() =>
-            throw new NotSupportedException(
-                "Windowed rendering isn't implemented for this CefGlue.Avalonia port yet - off-screen only.");
 
         protected internal override IOffScreenTargetHost CreateOffScreenControlHost()
         {
