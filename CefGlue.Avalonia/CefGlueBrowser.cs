@@ -12,6 +12,7 @@ using Xilium.CefGlue.Avalonia.Platform;
 using Xilium.CefGlue.Common;
 using Xilium.CefGlue.Common.Composition;
 using Xilium.CefGlue.Common.Handlers;
+using Xilium.CefGlue.Common.Helpers;
 using Xilium.CefGlue.Common.Platform;
 
 namespace Xilium.CefGlue.Avalonia
@@ -45,7 +46,63 @@ namespace Xilium.CefGlue.Avalonia
             _rootGrid = new Grid();
 
             var windowInfo = setupCefWindowInfo?.Invoke();
-            AttachTarget(ResolveControl(windowInfo, useTextureControl));
+            var control = ResolveControl(windowInfo, useTextureControl);
+
+            if (_textureFallbackReason != null)
+            {
+                // The adapter calls the setup delegate again when it creates the browser; keep CEF on
+                // plain OnPaint there instead of shared textures the bitmap path would have to read back.
+                _setupCefWindowInfo = () =>
+                {
+                    var info = setupCefWindowInfo();
+                    if (info != null)
+                    {
+                        info.SharedTextureEnabled = false;
+                    }
+                    return info;
+                };
+                _logger.Warn($"Shared-texture rendering not supported, using plain bitmap: {_textureFallbackReason}");
+            }
+
+            RenderMode = control is TextureControl ? OsrRenderMode.Texture
+                : windowInfo?.SharedTextureEnabled == true && _textureFallbackReason == null ? OsrRenderMode.BitmapReadback
+                : OsrRenderMode.Bitmap;
+            RenderModeReason = _textureFallbackReason;
+
+            AttachTarget(control);
+        }
+
+        /// <summary>
+        /// When true (default), a browser asking for shared-texture rendering (Texture or BitmapReadback) falls back
+        /// to plain Bitmap if the GPU can't do it, instead of rendering nothing. Read when each browser is created.
+        /// </summary>
+        public static bool AllowTextureFallback { get; set; } = true;
+
+        /// <summary>How this browser's frames currently reach the screen.</summary>
+        public OsrRenderMode RenderMode { get; private set; }
+
+        /// <summary>Why <see cref="RenderMode"/> isn't what was asked for; null when it is.</summary>
+        public string RenderModeReason { get; private set; }
+
+        /// <summary>
+        /// Raised on the UI thread when the render mode changes after creation (Texture → TextureDegraded, or
+        /// BitmapReadback → Bitmap when CEF turns out to paint in software).
+        /// A fallback decided at creation is only visible through <see cref="RenderMode"/>.
+        /// </summary>
+        public event Action<OsrRenderMode, string> RenderModeChanged;
+
+        private string _textureFallbackReason;
+
+        private void OnTextureSurfaceDegraded(AvaloniaBitmapSurface cpuFrames, string reason)
+        {
+            _logger.Warn($"TextureControl degraded to CPU rendering: {reason}");
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                RenderMode = OsrRenderMode.TextureDegraded;
+                RenderModeReason = reason;
+                RenderModeChanged?.Invoke(RenderMode, reason);
+            });
         }
 
         public new T AttachTarget<T>(T target) where T : BaseCefControl
@@ -88,12 +145,32 @@ namespace Xilium.CefGlue.Avalonia
             return target;
         }
 
+        /// <summary>
+        /// Avalonia has three modes: SharedTextureEnabled off → Bitmap (OnPaint); on → BitmapReadback
+        /// (GPU frame read back into a bitmap); on + <paramref name="useTextureControl"/> → Texture (zero-copy).
+        /// Both shared-texture modes need a working D3D11 device, so the probe guards both; when it fails the
+        /// browser drops to plain Bitmap instead of rendering nothing.
+        /// </summary>
         protected virtual BaseCefControl ResolveControl(CefWindowInfo info, bool useTextureControl)
         {
-            if (info?.SharedTextureEnabled == true && useTextureControl)
+            if (info?.SharedTextureEnabled == true)
             {
-                var textureControl = new TextureControl { UseSafeResize = true };
-                return textureControl;
+                var unsupportedReason = AllowTextureFallback ? SharedTextureSupport.GetUnsupportedReason() : null;
+#if DEBUG
+                // Test hook for the runtime fallback: start on TextureControl even when the probe would refuse it.
+                if (Environment.GetEnvironmentVariable("CEFGLUE_DEBUG_SKIP_TEXTURE_PROBE")?.Trim() == "1")
+                {
+                    unsupportedReason = null;
+                }
+#endif
+                if (unsupportedReason != null)
+                {
+                    _textureFallbackReason = unsupportedReason;
+                }
+                else if (useTextureControl)
+                {
+                    return new TextureControl { UseSafeResize = true };
+                }
             }
 
             return new BitmapControl { UseSafeResize = true };
@@ -135,7 +212,13 @@ namespace Xilium.CefGlue.Avalonia
             if (_activeControl is TextureControl textureControl)
             {
                 var textureHost = new OffScreenControlHost<TextureControl, IntPtr>(textureControl);
-                _textureSurface = new AvaloniaTextureRenderSurface { UseOSRDirtyRect = UseOSRDirtyRect, ShowOverlayInfo = _showOverlayInfo };
+                _textureSurface = new AvaloniaTextureRenderSurface
+                {
+                    UseOSRDirtyRect = UseOSRDirtyRect,
+                    ShowOverlayInfo = _showOverlayInfo,
+                    AllowCpuFallback = AllowTextureFallback,
+                };
+                _textureSurface.Degraded += OnTextureSurfaceDegraded;
                 textureHost.AttachRenderSurface(_textureSurface);
                 textureControl.AttachRenderSurface(_textureSurface);
                 return textureHost;
@@ -144,6 +227,33 @@ namespace Xilium.CefGlue.Avalonia
             var bitmapHost = new OffScreenControlHost<BitmapControl, byte[]>((BitmapControl)_activeControl);
             _surface = new AvaloniaBitmapSurface { UseOSRDirtyRect = UseOSRDirtyRect, ShowOverlayInfo = _showOverlayInfo };
             bitmapHost.AttachSurface(_surface);
+
+            if (RenderMode == OsrRenderMode.BitmapReadback)
+            {
+                // The probe can't see Chromium's GPU blocklist (e.g. VMware SVGA 3D passes our D3D11 check, yet CEF
+                // composites in software). Rendering still works - BitmapControl takes OnPaint too - but report it.
+                var renderSurface = bitmapHost.RenderSurface;
+                void OnFrameAccepted(int width, int height)
+                {
+                    if (renderSurface.IsAccelerated)
+                    {
+                        return;
+                    }
+
+                    renderSurface.FrameAccepted -= OnFrameAccepted;
+                    const string Reason = "CEF is painting in software (OnPaint): GPU compositing is unavailable or blocklisted.";
+                    _logger.Warn($"Shared textures requested but not used: {Reason}");
+
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        RenderMode = OsrRenderMode.Bitmap;
+                        RenderModeReason = Reason;
+                        RenderModeChanged?.Invoke(RenderMode, Reason);
+                    });
+                }
+                renderSurface.FrameAccepted += OnFrameAccepted;
+            }
+
             return bitmapHost;
         }
 

@@ -1,11 +1,13 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Xilium.CefGlue.Common.Helpers;
 
@@ -20,6 +22,9 @@ namespace Xilium.CefGlue.Avalonia.Common
         public Control FpsOverlay => _fpsOverlay;
 
         private AvaloniaTextureRenderSurface _renderSurface;
+        private readonly Grid _grid;
+        private BitmapControl _cpuView;
+        private string _pendingCompositorFailure;
 
         private Compositor _compositor;
         private CompositionSurfaceVisual _visual;
@@ -71,9 +76,9 @@ namespace Xilium.CefGlue.Avalonia.Common
                 IsVisible = false,
             };
 
-            var grid = new Grid();
-            grid.Children.Add(_focusProxy);
-            Content = grid;
+            _grid = new Grid();
+            _grid.Children.Add(_focusProxy);
+            Content = _grid;
 
             ResizeBegin += OnResizeBegin;
             SafeResize += OnResizeEnd;
@@ -119,12 +124,76 @@ namespace Xilium.CefGlue.Avalonia.Common
             ElementComposition.SetElementChildVisual(this, _visual);
 
             _interop = await _compositor.TryGetCompositionGpuInterop();
+
+            if (_interop == null)
+            {
+                ReportCompositorFailure("Avalonia's compositor has no GPU interop (software rendering?).");
+            }
+            else if (!_interop.SupportedImageHandleTypes.Contains(KnownPlatformGraphicsExternalImageHandleTypes.D3D11TextureGlobalSharedHandle))
+            {
+                ReportCompositorFailure("Avalonia's compositor can't import D3D11 shared textures.");
+            }
         }
 
         public void AttachRenderSurface(AvaloniaTextureRenderSurface renderSurface)
         {
             _renderSurface = renderSurface;
             _renderSurface.FrameAccepted += OnFrameAccepted;
+            _renderSurface.Degraded += OnRenderSurfaceDegraded;
+            _renderSurface.RetryFrameRequested += RequestFrame;
+
+            if (_pendingCompositorFailure != null)
+            {
+                ReportCompositorFailure(_pendingCompositorFailure);
+            }
+        }
+
+        // Failures only visible on the compositor side; the render surface switches on its next frame.
+        private void ReportCompositorFailure(string reason)
+        {
+            if (_renderSurface == null)
+            {
+                _pendingCompositorFailure = reason;
+                return;
+            }
+
+            _pendingCompositorFailure = null;
+            _renderSurface.RequestDegrade(reason);
+            RequestFrame();
+        }
+
+        private void RequestFrame() => Browser?.GetHost()?.Invalidate(CefPaintElementType.View);
+
+        // Called on the CEF thread. The control instance stays the same (input, IME, focus and popups are
+        // wired to it); only the visual swaps from the composition surface to a bitmap fed by the CPU pipeline.
+        private void OnRenderSurfaceDegraded(AvaloniaBitmapSurface cpuFrames, string reason)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_cpuView != null || _disposed)
+                {
+                    return;
+                }
+
+                _cpuView = new BitmapControl
+                {
+                    UseSafeResize = true,
+                    IsHitTestVisible = false,
+                    Focusable = false,
+                };
+                KeyboardNavigation.SetTabNavigation(_cpuView, KeyboardNavigationMode.None);
+                _cpuView.AttachSurface(cpuFrames);
+
+                if (_visual != null)
+                {
+                    _visual.Visible = false;
+                }
+                _fpsOverlay.IsVisible = false;
+                _grid.Children.Insert(0, _cpuView);
+
+                // The page may be static: ask CEF for a fresh frame so the bitmap isn't empty.
+                RequestFrame();
+            });
         }
 
         private void OnResizeBegin()
@@ -149,7 +218,7 @@ namespace Xilium.CefGlue.Avalonia.Common
 
         private void OnFrameAccepted(int width, int height)
         {
-            if (_renderSurface == null || _disposed || _interop == null || _drawingSurface == null || _visual == null)
+            if (_renderSurface == null || _renderSurface.IsDegraded || _disposed || _interop == null || _drawingSurface == null || _visual == null)
             {
                 return;
             }
@@ -177,7 +246,7 @@ namespace Xilium.CefGlue.Avalonia.Common
 
         private void RunFramePresent()
         {
-            if (_disposed || _interop == null || _drawingSurface == null || _renderSurface == null)
+            if (_disposed || _interop == null || _drawingSurface == null || _renderSurface == null || _renderSurface.IsDegraded)
             {
                 return;
             }
@@ -199,16 +268,25 @@ namespace Xilium.CefGlue.Avalonia.Common
             if (_imported == null || _importedHandle != handle)
             {
                 var previous = _imported;
-                _imported = _interop.ImportImage(
-                    new PlatformHandle(handle, KnownPlatformGraphicsExternalImageHandleTypes.D3D11TextureGlobalSharedHandle),
-                    new PlatformGraphicsExternalImageProperties
-                    {
-                        Width = width,
-                        Height = height,
-                        Format = PlatformGraphicsExternalImageFormat.B8G8R8A8UNorm,
+                try
+                {
+                    _imported = _interop.ImportImage(
+                        new PlatformHandle(handle, KnownPlatformGraphicsExternalImageHandleTypes.D3D11TextureGlobalSharedHandle),
+                        new PlatformGraphicsExternalImageProperties
+                        {
+                            Width = width,
+                            Height = height,
+                            Format = PlatformGraphicsExternalImageFormat.B8G8R8A8UNorm,
 
-                        TopLeftOrigin = true,
-                    });
+                            TopLeftOrigin = true,
+                        });
+                }
+                catch (Exception ex)
+                {
+                    _imported = null;
+                    ReportCompositorFailure($"Importing the shared texture failed (0x{ex.HResult:X8}: {ex.Message}).");
+                    return;
+                }
                 _importedHandle = handle;
                 _ = previous?.DisposeAsync();
             }
@@ -297,6 +375,8 @@ namespace Xilium.CefGlue.Avalonia.Common
             if (_renderSurface != null)
             {
                 _renderSurface.FrameAccepted -= OnFrameAccepted;
+                _renderSurface.Degraded -= OnRenderSurfaceDegraded;
+                _renderSurface.RetryFrameRequested -= RequestFrame;
             }
 
             var imported = _imported;

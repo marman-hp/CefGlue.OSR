@@ -27,15 +27,7 @@
             </MenuItem>
         </Menu>
 
-        <Grid Grid.Row="1">
-            <TabControl x:Name="BrowserTabs" SelectionChanged="TabControl_SelectionChanged"/>
-
-            <!-- Hosts the raw CEF control while a page is fullscreen - see DemoDI.axaml.cs's
-                 CreateNewTab/FullscreenModeChanged handler for why TabControl's own selected-content
-                 chrome isn't good enough on its own - mirrors CefGlue.Demo.WinUI's/WPF's identical
-                 FullscreenHost/fullscreenHost. -->
-            <Grid x:Name="FullscreenHost" Background="Black" IsVisible="False"/>
-        </Grid>
+        <TabControl x:Name="BrowserTabs" Grid.Row="1" SelectionChanged="TabControl_SelectionChanged"/>
 
         <GridSplitter x:Name="ActivityLogSplitter" Grid.Row="2" Height="5" HorizontalAlignment="Stretch"
                       ResizeDirection="Rows" Background="LightGray" IsVisible="False"/>
@@ -62,5 +54,11 @@
                 </StackPanel>
             </Grid>
         </Border>
+
+        <!-- Hosts the raw CEF control while a page is fullscreen - see DemoDI.axaml.cs's
+             CreateNewTab/FullscreenModeChanged handler for why TabControl's own selected-content
+             chrome isn't good enough on its own. Spans every row (declared last, so drawn on top)
+             to cover the menu and status bar too - mirrors CefGlue.Demo.WinUI's FullscreenHost. -->
+        <Grid x:Name="FullscreenHost" Grid.Row="0" Grid.RowSpan="5" Background="Black" IsVisible="False"/>
     </Grid>
 </Window>

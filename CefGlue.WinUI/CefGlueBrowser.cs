@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml.Controls;
 using Xilium.CefGlue.Common;
 using Xilium.CefGlue.Common.Composition;
 using Xilium.CefGlue.Common.Handlers;
+using Xilium.CefGlue.Common.Helpers;
 using Xilium.CefGlue.Common.Platform;
 using Xilium.CefGlue.WinUI.Common;
 using Xilium.CefGlue.WinUI.Platform;
@@ -43,8 +44,64 @@ namespace Xilium.CefGlue.WinUI
             _rootGrid = new Grid();
 
             var windowInfo = setupCefWindowInfo?.Invoke();
-            AttachTarget(ResolveControl(windowInfo));
+            var control = ResolveControl(windowInfo);
+
+            if (_textureFallbackReason != null)
+            {
+                // The adapter calls the setup delegate again when it creates the browser; keep CEF on
+                // plain OnPaint there instead of shared textures the bitmap path would have to read back.
+                _setupCefWindowInfo = () =>
+                {
+                    var info = setupCefWindowInfo();
+                    if (info != null)
+                    {
+                        info.SharedTextureEnabled = false;
+                    }
+                    return info;
+                };
+                _logger.Warn($"TextureControl not supported, using BitmapControl: {_textureFallbackReason}");
+            }
+
+            // BitmapReadback only when a subclass's ResolveControl picks BitmapControl with shared textures on.
+            RenderMode = control is TextureControl ? OsrRenderMode.Texture
+                : windowInfo?.SharedTextureEnabled == true && _textureFallbackReason == null ? OsrRenderMode.BitmapReadback
+                : OsrRenderMode.Bitmap;
+            RenderModeReason = _textureFallbackReason;
+
+            AttachTarget(control);
         }
+
+        /// <summary>
+        /// When true (default), a browser asking for shared-texture rendering falls back to the bitmap path
+        /// if the GPU can't do it, instead of rendering nothing. Read when each browser is created.
+        /// </summary>
+        public static bool AllowTextureFallback { get; set; } = true;
+
+        /// <summary>How this browser's frames currently reach the screen.</summary>
+        public OsrRenderMode RenderMode { get; private set; }
+
+        /// <summary>Why <see cref="RenderMode"/> isn't what was asked for; null when it is.</summary>
+        public string RenderModeReason { get; private set; }
+
+        /// <summary>
+        /// Raised on the UI thread when the render mode changes after creation (Texture → TextureDegraded).
+        /// A fallback decided at creation is only visible through <see cref="RenderMode"/>.
+        /// </summary>
+        public event Action<OsrRenderMode, string> RenderModeChanged;
+
+        private void OnTextureSurfaceDegraded(WinUIBitmapSurface cpuFrames, string reason)
+        {
+            _logger.Warn($"TextureControl degraded to CPU rendering: {reason}");
+
+            _rootGrid.DispatcherQueue.TryEnqueue(() =>
+            {
+                RenderMode = OsrRenderMode.TextureDegraded;
+                RenderModeReason = reason;
+                RenderModeChanged?.Invoke(RenderMode, reason);
+            });
+        }
+
+        private string _textureFallbackReason;
 
         public new T AttachTarget<T>(T target) where T : BaseCefControl
         {
@@ -82,7 +139,20 @@ namespace Xilium.CefGlue.WinUI
         {
             if (windowInfo?.SharedTextureEnabled == true)
             {
-                return new TextureControl { UseSafeResize = true };
+                var unsupportedReason = AllowTextureFallback ? SharedTextureSupport.GetUnsupportedReason() : null;
+#if DEBUG
+                // Test hook for the runtime fallback: start on TextureControl even when the probe would refuse it.
+                if (Environment.GetEnvironmentVariable("CEFGLUE_DEBUG_SKIP_TEXTURE_PROBE")?.Trim() == "1")
+                {
+                    unsupportedReason = null;
+                }
+#endif
+                if (unsupportedReason == null)
+                {
+                    return new TextureControl { UseSafeResize = true };
+                }
+
+                _textureFallbackReason = unsupportedReason;
             }
 
             return new BitmapControl { UseSafeResize = true };
@@ -141,7 +211,13 @@ namespace Xilium.CefGlue.WinUI
             if (_activeControl is TextureControl textureControl)
             {
                 var textureHost = new OffScreenControlHost<TextureControl, IntPtr>(textureControl);
-                _textureSurface = new WinUITextureRenderSurface { UseOSRDirtyRect = UseOSRDirtyRect, ShowOverlayInfo = _showOverlayInfo };
+                _textureSurface = new WinUITextureRenderSurface
+                {
+                    UseOSRDirtyRect = UseOSRDirtyRect,
+                    ShowOverlayInfo = _showOverlayInfo,
+                    AllowCpuFallback = AllowTextureFallback,
+                };
+                _textureSurface.Degraded += OnTextureSurfaceDegraded;
                 textureHost.AttachRenderSurface(_textureSurface);
                 textureControl.AttachRenderSurface(_textureSurface);
                 return textureHost;

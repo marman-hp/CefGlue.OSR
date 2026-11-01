@@ -67,6 +67,11 @@ namespace Xilium.CefGlue.Common
                     }
                 }
 
+                // With either switch CEF paints via OnPaint even for shared-texture browsers
+                // (verified on CEF 154), so a TextureControl would stay blank.
+                CefRuntimeLoader.IsGpuCompositingDisabled =
+                    commandLine.HasSwitch("disable-gpu") || commandLine.HasSwitch("disable-gpu-compositing");
+
             }
         }
 

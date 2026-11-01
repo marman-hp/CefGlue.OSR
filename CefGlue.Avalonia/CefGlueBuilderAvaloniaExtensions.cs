@@ -26,7 +26,8 @@ namespace Xilium.CefGlue.Avalonia
                 cefRequestContextFactory: options.RequestContextFactory,
                 setupCefWindowInfo: options.SetupCefWindowInfo,
                 setupCefBrowserSettings: options.SetupCefBrowserSettings,
-                host: host);
+                host: host,
+                useTextureControl: options.UseTextureControl);
         }
     }
 }

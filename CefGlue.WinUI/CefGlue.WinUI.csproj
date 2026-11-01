@@ -30,6 +30,9 @@
     <Compile Include="..\CefGlue.Common\BaseCefBrowser.cs">
       <Link>Common\BaseCefBrowser.cs</Link>
     </Compile>
+    <Compile Include="..\CefGlue.Common\SharedTextureSupport.cs">
+      <Link>Common\SharedTextureSupport.cs</Link>
+    </Compile>
   </ItemGroup>
 
   <ItemGroup>

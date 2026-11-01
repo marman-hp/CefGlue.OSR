@@ -44,7 +44,9 @@ namespace Xilium.CefGlue.Demo.Avalonia
                   var c = CefWindowInfo.Create();
                   c.SharedTextureEnabled = true;
                   return c;
-              }
+              },
+              // Default is BitmapReadback; CEFGLUE_DEMO_TEXTURE_CONTROL=1 tries zero-copy TextureControl.
+              UseTextureControl = Environment.GetEnvironmentVariable("CEFGLUE_DEMO_TEXTURE_CONTROL")?.Trim() == "1",
             });
 
             Browser.Control.HorizontalAlignment = HorizontalAlignment.Stretch;
@@ -57,6 +59,11 @@ namespace Xilium.CefGlue.Demo.Avalonia
             Browser.TitleChanged += (s, title) => TitleChanged?.Invoke(title);
             Browser.FullscreenModeChanged += OnBrowserFullscreenModeChanged;
             Browser.LifeSpanHandler = new BrowserLifeSpanHandler(Browser, openInNewTab);
+            Browser.RenderModeChanged += (mode, _) =>
+            {
+                LastStatus = $"Done · {mode}";
+                StatusTextChanged?.Invoke(LastStatus);
+            };
 
             Browser.DevToolsOpened += OnBrowserDevToolsOpened;
             Browser.DevToolsClosed += OnBrowserDevToolsClosed;
@@ -140,7 +147,7 @@ namespace Xilium.CefGlue.Demo.Avalonia
 
             Dispatcher.UIThread.Post(() =>
             {
-                LastStatus = "Done";
+                LastStatus = $"Done · {Browser.RenderMode}";
                 StatusTextChanged?.Invoke(LastStatus);
             });
         }

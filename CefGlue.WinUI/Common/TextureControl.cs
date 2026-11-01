@@ -14,6 +14,7 @@ namespace Xilium.CefGlue.WinUI.Common
         private readonly Border _fpsOverlay;
         private readonly TextBlock _fpsText;
         private WinUITextureRenderSurface _renderSurface;
+        private BitmapControl _cpuView;
 
         private bool _isResizeGhosting;
         private bool _resizeEnded;
@@ -77,10 +78,14 @@ namespace Xilium.CefGlue.WinUI.Common
             if (_renderSurface != null)
             {
                 _renderSurface.FrameAccepted -= OnFrameAccepted;
+                _renderSurface.Degraded -= OnRenderSurfaceDegraded;
+                _renderSurface.RetryFrameRequested -= RequestFrame;
             }
 
             _renderSurface = renderSurface;
             _renderSurface.FrameAccepted += OnFrameAccepted;
+            _renderSurface.Degraded += OnRenderSurfaceDegraded;
+            _renderSurface.RetryFrameRequested += RequestFrame;
 
             if (_panel.XamlRoot != null)
             {
@@ -92,6 +97,35 @@ namespace Xilium.CefGlue.WinUI.Common
         {
             _renderSurface?.AttachPanel(_panel);
         }
+
+        // Called on the CEF thread. The control instance stays the same (input, IME, focus and popups are
+        // wired to it); only the visual swaps from the swap chain to a bitmap fed by the CPU pipeline.
+        private void OnRenderSurfaceDegraded(WinUIBitmapSurface cpuFrames, string reason)
+        {
+            DispatcherQueue?.TryEnqueue(() =>
+            {
+                if (_cpuView != null)
+                {
+                    return;
+                }
+
+                _cpuView = new BitmapControl
+                {
+                    IsTabStop = false,
+                    IsHitTestVisible = false,
+                    HostWindow = HostWindow,
+                };
+                _cpuView.AttachSurface(cpuFrames);
+
+                _panel.Visibility = Visibility.Collapsed;
+                _root.Children.Insert(_root.Children.IndexOf(_panel) + 1, _cpuView);
+
+                // The page may be static: ask CEF for a fresh frame so the bitmap isn't empty.
+                RequestFrame();
+            });
+        }
+
+        private void RequestFrame() => Browser?.GetHost()?.Invalidate(CefPaintElementType.View);
 
         private void OnResizeBegin()
         {
@@ -144,7 +178,8 @@ namespace Xilium.CefGlue.WinUI.Common
             {
                 ApplyTransform(isGhosting, width, height);
 
-                if (_renderSurface != null && _renderSurface.ShowOverlayInfo)
+                // Once degraded, the CPU view draws its own overlay.
+                if (_cpuView == null && _renderSurface != null && _renderSurface.ShowOverlayInfo)
                 {
                     UpdateInfoOverlay();
                 }

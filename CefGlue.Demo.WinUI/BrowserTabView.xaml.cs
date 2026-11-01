@@ -51,6 +51,11 @@ namespace Xilium.CefGlue.Demo.WinUI
             Browser.TitleChanged += (s, title) => TitleChanged?.Invoke(title);
             Browser.FullscreenModeChanged += OnBrowserFullscreenModeChanged;
             Browser.LifeSpanHandler = new BrowserLifeSpanHandler(Browser, openInNewTab);
+            Browser.RenderModeChanged += (mode, _) =>
+            {
+                LastStatus = $"Done · {mode}";
+                StatusTextChanged?.Invoke(LastStatus);
+            };
 
             Browser.DevToolsOpened += OnBrowserDevToolsOpened;
             Browser.DevToolsClosed += OnBrowserDevToolsClosed;
@@ -165,7 +170,7 @@ namespace Xilium.CefGlue.Demo.WinUI
 
             DispatcherQueue.TryEnqueue(() =>
             {
-                LastStatus = "Done";
+                LastStatus = $"Done · {Browser.RenderMode}";
                 StatusTextChanged?.Invoke(LastStatus);
             });
         }

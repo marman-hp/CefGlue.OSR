@@ -24,11 +24,66 @@ namespace Xilium.CefGlue.Avalonia
 
         private const uint AcquireSyncTimeoutMs = 2000;
 
+        // GPU copy failures in a row before giving up on the texture path. Each failure first drops the
+        // device + slots so the next frame recreates them (covers a one-off device removal).
+        private const int MaxConsecutiveGpuFailures = 3;
+
+        private int _consecutiveGpuFailures;
+
+        // Set from the UI thread when the compositor can't show our textures; acted on by the next CEF frame.
+        private volatile string _pendingDegradeReason;
+
+        // CPU fallback ("degraded" mode): frames go through the same staging/readback pipeline as BitmapControl.
+        private AvaloniaBitmapSurface _cpuFrames;
+        private AvaloniaRenderSurface<AvaloniaBitmapSurface, byte[]> _cpuPipeline;
+
         public override bool AllowsTransparency => true;
 
         public bool UseOSRDirtyRect { get; set; } = true;
 
-        public bool ShowOverlayInfo { get; set; } = false;
+        private bool _showOverlayInfo;
+
+        public bool ShowOverlayInfo
+        {
+            get => _showOverlayInfo;
+            set
+            {
+                _showOverlayInfo = value;
+                if (_cpuFrames != null)
+                {
+                    _cpuFrames.ShowOverlayInfo = value;
+                }
+            }
+        }
+
+        public bool IsDegraded => _cpuFrames != null;
+
+        /// <summary>False keeps the old behaviour: failed GPU frames and software frames are dropped.</summary>
+        public bool AllowCpuFallback { get; set; } = true;
+
+        /// <summary>
+        /// Raised once, on the CEF thread, when the surface switches to CPU rendering. The argument is the
+        /// CPU frame source to display and the reason.
+        /// </summary>
+        public event Action<AvaloniaBitmapSurface, string> Degraded;
+
+        /// <summary>
+        /// Raised (CEF thread) after a failed GPU frame below the give-up threshold. A static page may not paint
+        /// again on its own, so the control asks CEF for another frame to retry with (or to reach the threshold).
+        /// </summary>
+        public event Action RetryFrameRequested;
+
+        /// <summary>
+        /// Asks for CPU rendering from the next frame on, for failures only the compositor side can see
+        /// (no GPU interop, texture import failed). Safe to call from any thread.
+        /// </summary>
+        public void RequestDegrade(string reason)
+        {
+            if (AllowCpuFallback && !IsDegraded)
+            {
+                _pendingDegradeReason = reason;
+            }
+        }
 
         public IntPtr CurrentHandle => _currentSlot >= 0 ? _slots[_currentSlot].Handle : IntPtr.Zero;
 
@@ -45,10 +100,94 @@ namespace Xilium.CefGlue.Avalonia
         protected override (int width, int height) GetAcceleratedFrameSize(CefAcceleratedPaintInfo info)
             => (info.Extra.CodedSize.Width, info.Extra.CodedSize.Height);
 
-        protected override void DeliverSoftwareFrame(IntPtr buffer, int width, int height, CefRectangle[] dirtyRects) { }
+        protected override void DeliverSoftwareFrame(IntPtr buffer, int width, int height, CefRectangle[] dirtyRects)
+        {
+            // A shared-texture browser only gets OnPaint when CEF is not GPU compositing (verified on CEF 154
+            // with WinUI: --disable-gpu / --disable-gpu-compositing, or a GPU process that fell back to software).
+            if (!AllowCpuFallback)
+            {
+                return;
+            }
+
+            EnterCpuMode("CEF is painting in software (OnPaint) instead of shared textures.");
+            SyncCpuPipeline();
+            _cpuPipeline.Render(buffer, width, height, dirtyRects);
+        }
 
         protected override void DeliverAcceleratedFrame(CefAcceleratedPaintInfo info, CefRectangle[] dirtyRects)
         {
+            if (_pendingDegradeReason is { } requested)
+            {
+                EnterCpuMode(requested);
+            }
+
+            if (!IsDegraded)
+            {
+                try
+                {
+                    CopyToSharedSlot(info, dirtyRects);
+                    _consecutiveGpuFailures = 0;
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    ReleaseGpuResources();
+
+                    if (!AllowCpuFallback)
+                    {
+                        throw;
+                    }
+
+                    if (++_consecutiveGpuFailures < MaxConsecutiveGpuFailures)
+                    {
+                        RetryFrameRequested?.Invoke();
+                        throw;
+                    }
+
+                    EnterCpuMode($"GPU presentation failed {MaxConsecutiveGpuFailures} times in a row (0x{ex.HResult:X8}: {ex.Message}).");
+                }
+            }
+
+            // Degraded: read the shared texture back to CPU, like BitmapControl does.
+            SyncCpuPipeline();
+            _cpuPipeline.Render(info, dirtyRects);
+        }
+
+        private void EnterCpuMode(string reason)
+        {
+            if (IsDegraded)
+            {
+                return;
+            }
+
+            _cpuFrames = new AvaloniaBitmapSurface { UseOSRDirtyRect = UseOSRDirtyRect, ShowOverlayInfo = _showOverlayInfo };
+            _cpuPipeline = new AvaloniaRenderSurface<AvaloniaBitmapSurface, byte[]>(_cpuFrames);
+            _pendingDegradeReason = null;
+            ReleaseGpuResources();
+
+            Degraded?.Invoke(_cpuFrames, reason);
+        }
+
+        // This surface has already gated the frame on size; let the inner pipeline see the same size.
+        private void SyncCpuPipeline()
+        {
+            _cpuPipeline.Resize(Width, Height);
+            _cpuPipeline.DeviceScaleFactor = DeviceScaleFactor;
+        }
+
+#if DEBUG
+        // Test hook: CEFGLUE_DEBUG_FAIL_TEXTURE=1 makes every texture copy fail like a removed device.
+        private static readonly bool SimulateGpuFailure = Environment.GetEnvironmentVariable("CEFGLUE_DEBUG_FAIL_TEXTURE")?.Trim() == "1";
+#endif
+
+        private void CopyToSharedSlot(CefAcceleratedPaintInfo info, CefRectangle[] dirtyRects)
+        {
+#if DEBUG
+            if (SimulateGpuFailure)
+            {
+                throw new System.Runtime.InteropServices.COMException("Simulated GPU failure (CEFGLUE_DEBUG_FAIL_TEXTURE).", unchecked((int)0x887A0005));
+            }
+#endif
             if (CefRuntime.Platform != CefRuntimePlatform.Windows)
             {
                 throw new PlatformNotSupportedException(
@@ -235,21 +374,33 @@ namespace Xilium.CefGlue.Avalonia
             slot.Height = 0;
         }
 
-        public override void Dispose()
+        private void ReleaseGpuResources()
         {
             lock (_deviceLock)
             {
-                _disposed = true;
-
                 for (var i = 0; i < SlotCount; i++)
                 {
                     ReleaseSlot(i);
                 }
 
+                _currentSlot = -1;
+
                 if (_device1 != null) { _device1->Release(); _device1 = null; }
                 if (_context != null) { _context->Release(); _context = null; }
                 if (_device != null) { _device->Release(); _device = null; }
             }
+        }
+
+        public override void Dispose()
+        {
+            lock (_deviceLock)
+            {
+                _disposed = true;
+            }
+
+            ReleaseGpuResources();
+            _cpuPipeline?.Dispose();
+            _cpuFrames?.Dispose();
 
             base.Dispose();
         }

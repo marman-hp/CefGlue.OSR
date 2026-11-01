@@ -16,10 +16,12 @@
     <ItemGroup>
         <Compile Remove="BaseCefBrowser.cs" />
         <Compile Remove="CommonBrowserBehaviors.cs" />
+        <Compile Remove="SharedTextureSupport.cs" />
     </ItemGroup>
 
     <ItemGroup>
         <None Include="BaseCefBrowser.cs" />
+        <None Include="SharedTextureSupport.cs" />
     </ItemGroup>
 
     <ItemGroup>

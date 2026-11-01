@@ -33,11 +33,51 @@ namespace Xilium.CefGlue.WinUI
         private readonly object _deviceLock = new object();
         private bool _disposed;
 
+        // GPU presentation failures in a row before giving up on the swap chain. Each failure first drops the
+        // device + swap chain so the next frame recreates them (covers a one-off device removal).
+        private const int MaxConsecutiveGpuFailures = 3;
+
+        private int _consecutiveGpuFailures;
+
+        // CPU fallback ("degraded" mode): frames go through the same staging/readback pipeline as BitmapControl.
+        private WinUIBitmapSurface _cpuFrames;
+        private WinUIRenderSurface<WinUIBitmapSurface, byte[]> _cpuPipeline;
+
         public override bool AllowsTransparency => true;
 
-        public bool ShowOverlayInfo { get; set; } = false;
+        private bool _showOverlayInfo;
+
+        public bool ShowOverlayInfo
+        {
+            get => _showOverlayInfo;
+            set
+            {
+                _showOverlayInfo = value;
+                if (_cpuFrames != null)
+                {
+                    _cpuFrames.ShowOverlayInfo = value;
+                }
+            }
+        }
 
         public bool UseOSRDirtyRect { get; set; } = true;
+
+        public bool IsDegraded => _cpuFrames != null;
+
+        /// <summary>False keeps the old behaviour: failed GPU frames and software frames are dropped.</summary>
+        public bool AllowCpuFallback { get; set; } = true;
+
+        /// <summary>
+        /// Raised once, on the CEF thread, when the surface switches to CPU rendering. The argument is the
+        /// CPU frame source to display and the reason.
+        /// </summary>
+        public event Action<WinUIBitmapSurface, string> Degraded;
+
+        /// <summary>
+        /// Raised (CEF thread) after a failed GPU frame below the give-up threshold. A static page may not paint
+        /// again on its own, so the control asks CEF for another frame to retry with (or to reach the threshold).
+        /// </summary>
+        public event Action RetryFrameRequested;
 
         public int CurrentWidth => _swapChainWidth;
 
@@ -52,7 +92,19 @@ namespace Xilium.CefGlue.WinUI
         protected override (int width, int height) GetAcceleratedFrameSize(CefAcceleratedPaintInfo info)
             => (info.Extra.CodedSize.Width, info.Extra.CodedSize.Height);
 
-        protected override void DeliverSoftwareFrame(IntPtr buffer, int width, int height, CefRectangle[] dirtyRects) { }
+        protected override void DeliverSoftwareFrame(IntPtr buffer, int width, int height, CefRectangle[] dirtyRects)
+        {
+            // A shared-texture browser only gets OnPaint when CEF is not GPU compositing (verified on CEF 154:
+            // --disable-gpu / --disable-gpu-compositing, or a GPU process that fell back to software).
+            if (!AllowCpuFallback)
+            {
+                return;
+            }
+
+            EnterCpuMode("CEF is painting in software (OnPaint) instead of shared textures.");
+            SyncCpuPipeline();
+            _cpuPipeline.Render(buffer, width, height, dirtyRects);
+        }
 
         public void AttachPanel(SwapChainPanel panel)
         {
@@ -65,6 +117,72 @@ namespace Xilium.CefGlue.WinUI
 
         protected override void DeliverAcceleratedFrame(CefAcceleratedPaintInfo info, CefRectangle[] dirtyRects)
         {
+            if (!IsDegraded)
+            {
+                try
+                {
+                    PresentOnSwapChain(info, dirtyRects);
+                    _consecutiveGpuFailures = 0;
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    ReleaseGpuResources();
+
+                    if (!AllowCpuFallback)
+                    {
+                        throw;
+                    }
+
+                    if (++_consecutiveGpuFailures < MaxConsecutiveGpuFailures)
+                    {
+                        RetryFrameRequested?.Invoke();
+                        throw;
+                    }
+
+                    EnterCpuMode($"GPU presentation failed {MaxConsecutiveGpuFailures} times in a row (0x{ex.HResult:X8}: {ex.Message}).");
+                }
+            }
+
+            // Degraded: read the shared texture back to CPU, like BitmapControl does.
+            SyncCpuPipeline();
+            _cpuPipeline.Render(info, dirtyRects);
+        }
+
+        private void EnterCpuMode(string reason)
+        {
+            if (IsDegraded)
+            {
+                return;
+            }
+
+            _cpuFrames = new WinUIBitmapSurface { UseOSRDirtyRect = UseOSRDirtyRect, ShowOverlayInfo = _showOverlayInfo };
+            _cpuPipeline = new WinUIRenderSurface<WinUIBitmapSurface, byte[]>(_cpuFrames);
+            ReleaseGpuResources();
+
+            Degraded?.Invoke(_cpuFrames, reason);
+        }
+
+        // This surface has already gated the frame on size; let the inner pipeline see the same size.
+        private void SyncCpuPipeline()
+        {
+            _cpuPipeline.Resize(Width, Height);
+            _cpuPipeline.DeviceScaleFactor = DeviceScaleFactor;
+        }
+
+#if DEBUG
+        // Test hook: CEFGLUE_DEBUG_FAIL_TEXTURE=1 makes every swap-chain present fail like a removed device.
+        private static readonly bool SimulateGpuFailure = Environment.GetEnvironmentVariable("CEFGLUE_DEBUG_FAIL_TEXTURE")?.Trim() == "1";
+#endif
+
+        private void PresentOnSwapChain(CefAcceleratedPaintInfo info, CefRectangle[] dirtyRects)
+        {
+#if DEBUG
+            if (SimulateGpuFailure)
+            {
+                throw new System.Runtime.InteropServices.COMException("Simulated GPU failure (CEFGLUE_DEBUG_FAIL_TEXTURE).", unchecked((int)0x887A0005));
+            }
+#endif
             lock (_deviceLock)
             {
                 if (_disposed || _panel == null)
@@ -297,18 +415,33 @@ namespace Xilium.CefGlue.WinUI
             _accumulatorCapacityHeight = newCapacityHeight;
         }
 
-        public override void Dispose()
+        private void ReleaseGpuResources()
         {
             lock (_deviceLock)
             {
-                _disposed = true;
-
                 if (_accumulatorTexture != null) { _accumulatorTexture->Release(); _accumulatorTexture = null; }
                 if (_swapChain != null) { _swapChain->Release(); _swapChain = null; }
                 if (_device1 != null) { _device1->Release(); _device1 = null; }
                 if (_context != null) { _context->Release(); _context = null; }
                 if (_device != null) { _device->Release(); _device = null; }
+
+                _accumulatorCapacityWidth = 0;
+                _accumulatorCapacityHeight = 0;
+                _swapChainWidth = 0;
+                _swapChainHeight = 0;
             }
+        }
+
+        public override void Dispose()
+        {
+            lock (_deviceLock)
+            {
+                _disposed = true;
+            }
+
+            ReleaseGpuResources();
+            _cpuPipeline?.Dispose();
+            _cpuFrames?.Dispose();
 
             base.Dispose();
         }

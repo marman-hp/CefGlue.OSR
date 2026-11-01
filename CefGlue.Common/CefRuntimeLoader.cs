@@ -139,6 +139,12 @@ namespace Xilium.CefGlue.Common
 
         internal static bool IsOSREnabled { get; private set; }
 
+        /// <summary>
+        /// True when the browser process runs with --disable-gpu or --disable-gpu-compositing
+        /// (set while CEF initializes). Shared-texture rendering can't work then.
+        /// </summary>
+        public static bool IsGpuCompositingDisabled { get; internal set; }
+
         private static string BrowserProcessFileName
         {
             get
