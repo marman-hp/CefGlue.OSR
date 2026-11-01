@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DotnetVersion)</TargetFramework>
+    <RootNamespace>Xilium.CefGlue.GTK</RootNamespace>
+    <AssemblyName>Xilium.CefGlue.GTK</AssemblyName>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\CefGlue.Common\BaseCefBrowser.cs" Link="Common\BaseCefBrowser.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="GirCore.Gtk-4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CefGlue.Common\CefGlue.Common.csproj">
+      <PrivateAssets>none</PrivateAssets>
+    </ProjectReference>
+    <ProjectReference Include="..\CefGlue\CefGlue.csproj">
+      <PrivateAssets>all</PrivateAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+</Project>

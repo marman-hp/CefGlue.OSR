@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>$(DotnetVersion)</TargetFramework>
+    <RootNamespace>Xilium.CefGlue.Demo.GTK</RootNamespace>
+    <AssemblyName>Xilium.CefGlue.Demo.GTK</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="GirCore.Gtk-4.0" />
+  </ItemGroup>
+
+  <!--<Import Project="$(ProjectDir)..\CefGlue.CopyLocal.props" />-->
+
+  <ItemGroup>
+    <ProjectReference Include="..\CefGlue.GTK\CefGlue.GTK.csproj" />
+    <ProjectReference Include="..\CefGlue.BrowserProcess\CefGlue.BrowserProcess.csproj" />
+  </ItemGroup>
+
+  <Import Project="$(ProjectDir)..\CefGlue.Common\build\CefGlue.Common.targets" />
+
+</Project>
