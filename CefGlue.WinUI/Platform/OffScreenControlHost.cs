@@ -230,6 +230,14 @@ namespace Xilium.CefGlue.WinUI.Platform
 
             try
             {
+                // Null once the host window is closed (e.g. a popup closing while CEF still reports focus changes).
+                var hwnd = WindowNative.GetWindowHandle(_control.HostWindow);
+                var appWindow = hwnd == IntPtr.Zero ? null : AppWindow.GetFromWindowId(Win32Interop.GetWindowIdFromWindow(hwnd));
+                if (appWindow == null)
+                {
+                    return false;
+                }
+
                 _ime = new WinUICoreTextIme(
                     _control.DispatcherQueue,
                     GetImeLayout,
@@ -237,8 +245,6 @@ namespace Xilium.CefGlue.WinUI.Platform
                     OnImeCommitted,
                     OnImeDirectText);
 
-                var hwnd = WindowNative.GetWindowHandle(_control.HostWindow);
-                var appWindow = AppWindow.GetFromWindowId(Win32Interop.GetWindowIdFromWindow(hwnd));
                 appWindow.Changed += (_, change) =>
                 {
                     if (change.DidPositionChange || change.DidSizeChange)
@@ -259,12 +265,19 @@ namespace Xilium.CefGlue.WinUI.Platform
 
         private void ActivateIme()
         {
+            var active = _textInputActive && ControlHasFocus;
+
+            // Only build the IME once an editable element is focused; there is nothing to deactivate before that.
+            if (_ime == null && !active)
+            {
+                return;
+            }
+
             if (!EnsureIme())
             {
                 return;
             }
 
-            var active = _textInputActive && ControlHasFocus;
             _ime.SetActive(active);
 
             if (active)
