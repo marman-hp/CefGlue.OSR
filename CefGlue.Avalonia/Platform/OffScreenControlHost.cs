@@ -20,6 +20,9 @@ namespace Xilium.CefGlue.Avalonia.Platform
     {
         private const int MouseWheelDelta = 100;
 
+        private static readonly DataFormat<string> HtmlFormat = DataFormat.CreateStringPlatformFormat("text/html");
+        private static readonly DataFormat<string> UriListFormat = DataFormat.CreateStringPlatformFormat("text/uri-list");
+
         private PointerPressedEventArgs _lastPointerEvent;
         private Cursor _currentDragCursor;
         private Cursor _previousCursor;
@@ -243,8 +246,11 @@ namespace Xilium.CefGlue.Avalonia.Platform
             _lastAppliedCursorOps = null;
             _lastDragOverForwardMs = -1;
 
-            var screen = _control.PointToScreen(e.GetPosition(_control));
-            NativeDragDropHelper.NotifyDrop(e.DataTransfer, screen.X, screen.Y, (int)e.DragEffects);
+            if (OperatingSystem.IsWindows())
+            {
+                var screen = _control.PointToScreen(e.GetPosition(_control));
+                NativeDragDropHelper.NotifyDrop(e.DataTransfer, screen.X, screen.Y, (int)e.DragEffects);
+            }
 
             _control.Cursor = _previousCursor;
             Drop?.Invoke(e.AsCefMouseEvent(MousePositionReferential, MousePositionOffset), e.DragEffects.AsCefDragOperationsMask());
@@ -257,8 +263,11 @@ namespace Xilium.CefGlue.Avalonia.Platform
                 e.DragEffects = _currentAllowedDragOps.AsDragDropEffects();
             }
 
-            var screen = _control.PointToScreen(e.GetPosition(_control));
-            NativeDragDropHelper.NotifyDragOver(screen.X, screen.Y, (int)_currentAllowedDragOps.AsDragDropEffects());
+            if (OperatingSystem.IsWindows())
+            {
+                var screen = _control.PointToScreen(e.GetPosition(_control));
+                NativeDragDropHelper.NotifyDragOver(screen.X, screen.Y, (int)_currentAllowedDragOps.AsDragDropEffects());
+            }
 
             var nowMs = Environment.TickCount64;
             if (_lastDragOverForwardMs < 0 || nowMs - _lastDragOverForwardMs >= DragOverThrottleMs)
@@ -279,7 +288,10 @@ namespace Xilium.CefGlue.Avalonia.Platform
             _isDragOverOwnControl = false;
             _lastAppliedCursorOps = null;
 
-            NativeDragDropHelper.NotifyDragLeave();
+            if (OperatingSystem.IsWindows())
+            {
+                NativeDragDropHelper.NotifyDragLeave();
+            }
 
             DragLeave?.Invoke();
         }
@@ -295,11 +307,14 @@ namespace Xilium.CefGlue.Avalonia.Platform
             _isDragOverOwnControl = true;
             _previousCursor = _control.Cursor;
 
-            var hwnd = global::Avalonia.Controls.TopLevel.GetTopLevel(_control)?.TryGetPlatformHandle()?.Handle;
-            if (hwnd.HasValue && hwnd.Value != IntPtr.Zero)
+            if (OperatingSystem.IsWindows())
             {
-                var screen = _control.PointToScreen(e.GetPosition(_control));
-                NativeDragDropHelper.NotifyDragEnter(hwnd.Value, e.DataTransfer, screen.X, screen.Y, (int)e.DragEffects);
+                var hwnd = global::Avalonia.Controls.TopLevel.GetTopLevel(_control)?.TryGetPlatformHandle()?.Handle;
+                if (hwnd.HasValue && hwnd.Value != IntPtr.Zero)
+                {
+                    var screen = _control.PointToScreen(e.GetPosition(_control));
+                    NativeDragDropHelper.NotifyDragEnter(hwnd.Value, e.DataTransfer, screen.X, screen.Y, (int)e.DragEffects);
+                }
             }
 
             DragEnter?.Invoke(e.AsCefMouseEvent(MousePositionReferential, MousePositionOffset), e.GetDragData(), e.DragEffects.AsCefDragOperationsMask());
@@ -519,12 +534,108 @@ namespace Xilium.CefGlue.Avalonia.Platform
                 return CefDragOperationsMask.None;
             }
 
-            var result = await Dispatcher.UIThread.InvokeAsync(() => RunNativeDrag(dragData, allowedOps));
+            CefDragOperationsMask result;
+
+            if (OperatingSystem.IsWindows())
+            {
+                result = await Dispatcher.UIThread.InvokeAsync(() => RunNativeDrag(dragData, allowedOps));
+            }
+            else
+            {
+                var item = new DataTransferItem();
+                item.SetText(dragData.FragmentText ?? dragData.LinkUrl ?? "");
+
+                if (!string.IsNullOrEmpty(dragData.LinkUrl))
+                {
+                    item.Set(UriListFormat, dragData.LinkUrl);
+                }
+
+                if (!string.IsNullOrEmpty(dragData.FragmentHtml))
+                {
+                    item.Set(HtmlFormat, dragData.FragmentHtml);
+                }
+
+                var dataTransfer = new DataTransfer();
+                dataTransfer.Add(item);
+
+                _activeOutboundDrag = true;
+                try
+                {
+                    // The drag icon lives entirely on the UI thread: its Xlib connection is not thread-safe.
+                    var effects = await Dispatcher.UIThread.InvokeAsync(async () =>
+                    {
+                        var dragIcon = OperatingSystem.IsLinux() ? TryShowDragIcon(dragData) : null;
+                        var dragIconTimer = dragIcon == null ? null
+                            : new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Input, (_, _) => dragIcon.FollowPointer());
+                        dragIconTimer?.Start();
+                        try
+                        {
+                            return await DragDrop.DoDragDropAsync(lastPointerEvent, dataTransfer, allowedOps.AsDragDropEffects());
+                        }
+                        finally
+                        {
+                            dragIconTimer?.Stop();
+                            dragIcon?.Close();
+                        }
+                    });
+                    result = effects.AsCefDragOperationsMask();
+                }
+                finally
+                {
+                    _activeOutboundDrag = false;
+                }
+            }
 
             this._lastPointerEvent = null;
             _previousCursor = null;
             _currentDragCursor = null;
             return result;
+        }
+
+        // CEF's drag image (the same one the Windows path hands to IDragSourceHelper) in an X11 icon window.
+        private static Linux.X11DragIconWindow TryShowDragIcon(CefDragData dragData)
+        {
+            if (!dragData.HasImage)
+            {
+                return null;
+            }
+
+            var icon = new Linux.X11DragIconWindow();
+            try
+            {
+                if (!icon.Open())
+                {
+                    return null;
+                }
+
+                using var cefImage = dragData.GetImage();
+                if (cefImage == null)
+                {
+                    icon.Close();
+                    return null;
+                }
+
+                var alphaType = icon.HasAlpha ? CefAlphaType.Premultiplied : CefAlphaType.Opaque;
+                using var binary = cefImage.GetAsBitmap(1f, CefColorType.Bgra8888, alphaType, out var width, out var height);
+                if (binary == null || width <= 0 || height <= 0)
+                {
+                    icon.Close();
+                    return null;
+                }
+
+                var pixels = new byte[width * 4 * height];
+                binary.GetData(pixels, pixels.Length, 0);
+
+                var hotspot = dragData.GetImageHotspot();
+                icon.Show(pixels, width, height, hotspot.X, hotspot.Y);
+                return icon;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[AVALONIA-DND] drag icon failed: {ex}");
+                icon.Close();
+                return null;
+            }
         }
 
         private CefDragOperationsMask RunNativeDrag(CefDragData dragData, CefDragOperationsMask allowedOps)
