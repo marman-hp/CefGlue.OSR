@@ -59,8 +59,13 @@ namespace Xilium.CefGlue.Demo.Avalonia
             Browser.TitleChanged += (s, title) => TitleChanged?.Invoke(title);
             Browser.FullscreenModeChanged += OnBrowserFullscreenModeChanged;
             Browser.LifeSpanHandler = new BrowserLifeSpanHandler(Browser, openInNewTab);
-            Browser.RenderModeChanged += (mode, _) =>
+            if (Browser.RenderModeReason != null)
             {
+                Console.WriteLine($"[demo] RenderMode {Browser.RenderMode}: {Browser.RenderModeReason}");
+            }
+            Browser.RenderModeChanged += (mode, reason) =>
+            {
+                Console.WriteLine($"[demo] RenderMode -> {mode}: {reason}");
                 LastStatus = $"Done · {mode}";
                 StatusTextChanged?.Invoke(LastStatus);
             };

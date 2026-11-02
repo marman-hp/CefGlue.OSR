@@ -36,12 +36,36 @@ namespace Xilium.CefGlue.Demo.Avalonia
             {
                 cefFlags = [.. cefFlags, new KeyValuePair<string, string>(gpuSwitch, null)];
             }
+            // Same Linux flags as CefGlue.GTK's CefGlueGtkFlags: ozone platform from the session type, no
+            // accelerated video decode on X11, and the GL backend its dma-buf texture path uses.
+            if (OperatingSystem.IsLinux())
+            {
+                var wayland = string.Equals(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"), "wayland", StringComparison.OrdinalIgnoreCase);
+                cefFlags = [.. cefFlags, new KeyValuePair<string, string>("ozone-platform", wayland ? "wayland" : "x11")];
+                if (!wayland)
+                {
+                    cefFlags = [.. cefFlags, new KeyValuePair<string, string>("disable-accelerated-video-decode", null)];
+                }
+                if (Environment.GetEnvironmentVariable("CEFGLUE_DEMO_TEXTURE_CONTROL")?.Trim() == "1")
+                {
+                    cefFlags = [.. cefFlags, new KeyValuePair<string, string>("use-angle", "gl-egl")];
+                }
+            }
             if (Environment.GetEnvironmentVariable("CEFGLUE_DEMO_NO_TEXTURE_FALLBACK")?.Trim() == "1")
             {
                 Xilium.CefGlue.Avalonia.CefGlueBrowser.AllowTextureFallback = false;
             }
 
             var appBuilder = AppBuilder.Configure<App>().UsePlatformDetect();
+
+            if (OperatingSystem.IsLinux())
+            {
+                // The Linux texture path imports CEF's dma-bufs through EGL; a GLX context can't do that.
+                appBuilder = appBuilder.With(new X11PlatformOptions
+                {
+                    RenderingMode = new[] { X11RenderingMode.Egl, X11RenderingMode.Glx, X11RenderingMode.Software },
+                });
+            }
 
             appBuilder.AfterSetup(_ => CefRuntimeLoader.Initialize(settings, flags: cefFlags))
                       .StartWithClassicDesktopLifetime(args);

@@ -8,6 +8,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Xilium.CefGlue.Avalonia.Common;
+using Xilium.CefGlue.Avalonia.Platform.Linux;
 using Xilium.CefGlue.Common;
 using Xilium.CefGlue.Common.Helpers;
 using Xilium.CefGlue.Common.Platform;
@@ -18,8 +19,11 @@ namespace Xilium.CefGlue.Avalonia.Platform
     {
         private readonly BaseCefControl _mainControl;
         private readonly PopupLayer _popupLayer;
-        private readonly AvaloniaBitmapSurface _surface;
         private readonly OffScreenRenderSurface _renderSurface;
+
+        // Linux texture mode: the popup arrives as dma-bufs too, so the GL presenter draws it.
+        private readonly GlTextureControl _glControl;
+        private bool _visible;
 
         public PopupControlHost(Grid rootGrid, BaseCefControl mainControl)
         {
@@ -28,14 +32,21 @@ namespace Xilium.CefGlue.Avalonia.Platform
             _popupLayer = new PopupLayer();
             rootGrid.Children.Add(_popupLayer);
 
-            _surface = new AvaloniaBitmapSurface();
-            _surface.FrameReady = OnFrameReady;
-            _renderSurface = new AvaloniaRenderSurface<AvaloniaBitmapSurface, byte[]>(_surface);
-        }
-
-        private void OnFrameReady(CefRectangle dirtyRect)
-        {
-            _popupLayer.UpdateFrame(_surface);
+            if (mainControl is GlTextureControl glControl)
+            {
+                _glControl = glControl;
+                var glPopup = new AvaloniaGlTextureRenderSurface();
+                // Software-painted popups (CEF not GPU compositing) go back to the bitmap layer.
+                glPopup.Degraded += (cpuFrames, _) => cpuFrames.FrameReady = _ => _popupLayer.UpdateFrame(cpuFrames);
+                glControl.AttachPopupSurface(glPopup);
+                _renderSurface = glPopup;
+            }
+            else
+            {
+                var surface = new AvaloniaBitmapSurface();
+                surface.FrameReady = _ => _popupLayer.UpdateFrame(surface);
+                _renderSurface = new AvaloniaRenderSurface<AvaloniaBitmapSurface, byte[]>(surface);
+            }
         }
 
         public OffScreenRenderSurface RenderSurface => _renderSurface;
@@ -52,11 +63,14 @@ namespace Xilium.CefGlue.Avalonia.Platform
             Width = width;
             Height = height;
 
+            _glControl?.SetPopup(_visible, new Rect(x, y, width, height));
             Dispatcher.UIThread.Post(() => _popupLayer.Margin = new Thickness(x, y, 0, 0));
         }
 
         public void Open()
         {
+            _visible = true;
+            _glControl?.SetPopup(true, new Rect(OffsetX, OffsetY, Width, Height));
             Dispatcher.UIThread.Post(() =>
             {
                 _popupLayer.IsVisible = true;
@@ -67,6 +81,8 @@ namespace Xilium.CefGlue.Avalonia.Platform
 
         public void Close()
         {
+            _visible = false;
+            _glControl?.SetPopup(false, new Rect(OffsetX, OffsetY, Width, Height));
             Dispatcher.UIThread.Post(() => _popupLayer.IsVisible = false);
         }
 

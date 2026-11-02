@@ -9,6 +9,7 @@ using Avalonia.Layout;
 using Avalonia.Threading;
 using Xilium.CefGlue.Avalonia.Common;
 using Xilium.CefGlue.Avalonia.Platform;
+using Xilium.CefGlue.Avalonia.Platform.Linux;
 using Xilium.CefGlue.Common;
 using Xilium.CefGlue.Common.Composition;
 using Xilium.CefGlue.Common.Handlers;
@@ -57,7 +58,7 @@ namespace Xilium.CefGlue.Avalonia
                 _logger.Warn($"Shared-texture rendering not supported, using plain bitmap: {_textureFallbackReason}");
             }
 
-            RenderMode = control is TextureControl ? OsrRenderMode.Texture
+            RenderMode = control is TextureControl or GlTextureControl ? OsrRenderMode.Texture
                 : windowInfo?.SharedTextureEnabled == true && _textureFallbackReason == null ? OsrRenderMode.BitmapReadback
                 : OsrRenderMode.Bitmap;
             RenderModeReason = _textureFallbackReason;
@@ -118,6 +119,11 @@ namespace Xilium.CefGlue.Avalonia
             {
                 _rootGrid.Children.Add(textureControlWithOverlay.FpsOverlay);
             }
+            else if (target is GlTextureControl glTextureControlWithOverlay)
+            {
+                _rootGrid.Children.Add(glTextureControlWithOverlay.FpsOverlay);
+                glTextureControlWithOverlay.Failed += reason => _logger.Error($"GL texture rendering can't show frames: {reason}");
+            }
 
             base.AttachTarget(CreateOffScreenControlHost());
 
@@ -133,15 +139,19 @@ namespace Xilium.CefGlue.Avalonia
 
         /// <summary>
         /// Avalonia has three modes: SharedTextureEnabled off → Bitmap (OnPaint); on → BitmapReadback
-        /// (GPU frame read back into a bitmap); on + <paramref name="useTextureControl"/> → Texture (zero-copy).
-        /// Both shared-texture modes need a working D3D11 device, so the probe guards both; when it fails the
-        /// browser drops to plain Bitmap instead of rendering nothing.
+        /// (GPU frame read back into a bitmap, Windows only); on + <paramref name="useTextureControl"/> → Texture
+        /// (zero-copy: D3D11 on Windows, EGL dma-buf on Linux). The probe guards both shared-texture modes; when it
+        /// fails the browser drops to plain Bitmap instead of rendering nothing.
         /// </summary>
         protected virtual BaseCefControl ResolveControl(CefWindowInfo info, bool useTextureControl)
         {
             if (info?.SharedTextureEnabled == true)
             {
                 var unsupportedReason = AllowTextureFallback ? SharedTextureSupport.GetUnsupportedReason() : null;
+                if (unsupportedReason == null && AllowTextureFallback && !useTextureControl && !OperatingSystem.IsWindows())
+                {
+                    unsupportedReason = "Reading shared textures back to the CPU is only implemented on Windows (use UseTextureControl).";
+                }
 #if DEBUG
                 // Test hook for the runtime fallback: start on TextureControl even when the probe would refuse it.
                 if (Environment.GetEnvironmentVariable("CEFGLUE_DEBUG_SKIP_TEXTURE_PROBE")?.Trim() == "1")
@@ -155,7 +165,9 @@ namespace Xilium.CefGlue.Avalonia
                 }
                 else if (useTextureControl)
                 {
-                    return new TextureControl { UseSafeResize = true };
+                    return OperatingSystem.IsLinux()
+                        ? new GlTextureControl { UseSafeResize = true }
+                        : new TextureControl { UseSafeResize = true };
                 }
             }
 
@@ -168,11 +180,12 @@ namespace Xilium.CefGlue.Avalonia
 
         private AvaloniaBitmapSurface _surface;
         private AvaloniaTextureRenderSurface _textureSurface;
+        private AvaloniaGlTextureRenderSurface _glTextureSurface;
         private bool _showOverlayInfo = false;
 
         public bool ShowOverlayInfo
         {
-            get => _surface?.ShowOverlayInfo ?? _textureSurface?.ShowOverlayInfo ?? _showOverlayInfo;
+            get => _surface?.ShowOverlayInfo ?? _textureSurface?.ShowOverlayInfo ?? _glTextureSurface?.ShowOverlayInfo ?? _showOverlayInfo;
             set
             {
                 _showOverlayInfo = value;
@@ -185,6 +198,11 @@ namespace Xilium.CefGlue.Avalonia
                 {
                     _textureSurface.ShowOverlayInfo = value;
                     (_activeControl as TextureControl)?.RefreshOverlay();
+                }
+                else if (_glTextureSurface != null)
+                {
+                    _glTextureSurface.ShowOverlayInfo = value;
+                    (_activeControl as GlTextureControl)?.RefreshOverlay();
                 }
             }
         }
@@ -204,6 +222,21 @@ namespace Xilium.CefGlue.Avalonia
                 textureHost.AttachRenderSurface(_textureSurface);
                 textureControl.AttachRenderSurface(_textureSurface);
                 return textureHost;
+            }
+
+            if (_activeControl is GlTextureControl glTextureControl)
+            {
+                var glTextureHost = new OffScreenControlHost<GlTextureControl, IntPtr>(glTextureControl);
+                _glTextureSurface = new AvaloniaGlTextureRenderSurface
+                {
+                    UseOSRDirtyRect = UseOSRDirtyRect,
+                    ShowOverlayInfo = _showOverlayInfo,
+                    AllowCpuFallback = AllowTextureFallback,
+                };
+                _glTextureSurface.Degraded += OnTextureSurfaceDegraded;
+                glTextureHost.AttachRenderSurface(_glTextureSurface);
+                glTextureControl.AttachRenderSurface(_glTextureSurface);
+                return glTextureHost;
             }
 
             var bitmapHost = new OffScreenControlHost<BitmapControl, byte[]>((BitmapControl)_activeControl);
