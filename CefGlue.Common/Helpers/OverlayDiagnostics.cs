@@ -267,6 +267,14 @@ namespace Xilium.CefGlue.Common.Helpers
 
         private static double GetGpuUsagePercent()
         {
+            if (OperatingSystem.IsLinux())
+            {
+                lock (_gpuUsageLock)
+                {
+                    return GetLinuxGpuBusyPercent() ?? GetLinuxFdinfoGpuPercent();
+                }
+            }
+
             if (!OperatingSystem.IsWindows())
             {
                 return 0;
@@ -328,6 +336,127 @@ namespace Xilium.CefGlue.Common.Helpers
                     return 0;
                 }
             }
+        }
+
+        // amdgpu: whole-GPU load, the closest match to the Windows "GPU Engine" counters. Busiest card wins.
+        private static double? GetLinuxGpuBusyPercent()
+        {
+            try
+            {
+                double? busiest = null;
+                foreach (var card in Directory.EnumerateDirectories("/sys/class/drm", "card*"))
+                {
+                    var path = Path.Combine(card, "device", "gpu_busy_percent");
+                    if (File.Exists(path) && double.TryParse(File.ReadAllText(path).Trim(), out var percent))
+                    {
+                        busiest = Math.Max(busiest ?? 0, percent);
+                    }
+                }
+
+                return busiest.HasValue ? Math.Clamp(busiest.Value, 0, 100) : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static readonly Dictionary<string, long> _lastDrmEngineNs = new Dictionary<string, long>();
+        private static long _lastDrmSampleMs;
+
+        // Other drivers (i915, msm, panfrost, ...): DRM fdinfo engine busy time of this process and the CEF
+        // subprocesses, keyed by drm-client-id so a client shared across fds counts once. Reports the busiest engine.
+        private static double GetLinuxFdinfoGpuPercent()
+        {
+            var engineNs = new Dictionary<string, long>();
+            var seenClients = new HashSet<string>();
+
+            var pids = new List<int> { Environment.ProcessId };
+            try
+            {
+                foreach (var process in Process.GetProcessesByName(BrowserSubProcessName))
+                {
+                    using (process)
+                    {
+                        pids.Add(process.Id);
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            foreach (var pid in pids)
+            {
+                IEnumerable<string> fdinfos;
+                try
+                {
+                    fdinfos = Directory.EnumerateFiles($"/proc/{pid}/fdinfo").ToArray();
+                }
+                catch
+                {
+                    continue;
+                }
+
+                foreach (var fdinfo in fdinfos)
+                {
+                    string[] lines;
+                    try
+                    {
+                        lines = File.ReadAllLines(fdinfo);
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+
+                    var clientLine = lines.FirstOrDefault(l => l.StartsWith("drm-client-id:", StringComparison.Ordinal));
+                    if (clientLine == null || !seenClients.Add(pid + "/" + clientLine))
+                    {
+                        continue;
+                    }
+
+                    foreach (var line in lines)
+                    {
+                        // e.g. "drm-engine-render:	123456789 ns"
+                        if (!line.StartsWith("drm-engine-", StringComparison.Ordinal) || line.StartsWith("drm-engine-capacity", StringComparison.Ordinal))
+                        {
+                            continue;
+                        }
+
+                        var colon = line.IndexOf(':');
+                        var parts = line[(colon + 1)..].Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
+                        if (colon > 0 && parts.Length >= 1 && long.TryParse(parts[0], out var ns))
+                        {
+                            var engine = line[..colon];
+                            engineNs[engine] = engineNs.GetValueOrDefault(engine) + ns;
+                        }
+                    }
+                }
+            }
+
+            var now = Environment.TickCount64;
+            var elapsedNs = (now - _lastDrmSampleMs) * 1_000_000.0;
+            double busiest = 0;
+            if (_lastDrmSampleMs != 0 && elapsedNs > 0)
+            {
+                foreach (var kv in engineNs)
+                {
+                    if (_lastDrmEngineNs.TryGetValue(kv.Key, out var last) && kv.Value >= last)
+                    {
+                        busiest = Math.Max(busiest, (kv.Value - last) / elapsedNs * 100.0);
+                    }
+                }
+            }
+
+            _lastDrmEngineNs.Clear();
+            foreach (var kv in engineNs)
+            {
+                _lastDrmEngineNs[kv.Key] = kv.Value;
+            }
+            _lastDrmSampleMs = now;
+
+            return Math.Clamp(busiest, 0, 100);
         }
 
         private static string GetProcessorName()

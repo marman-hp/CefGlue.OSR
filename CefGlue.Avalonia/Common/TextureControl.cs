@@ -59,7 +59,7 @@ namespace Xilium.CefGlue.Avalonia.Common
 
             _fpsText = new TextBlock
             {
-                Foreground = Brushes.LimeGreen,
+                Foreground = Brushes.White,
                 FontFamily = new FontFamily("Consolas,Menlo,DejaVu Sans Mono,Liberation Mono,Noto Sans Mono,Ubuntu Mono,monospace"),
                 FontWeight = FontWeight.Normal,
                 FontSize = 11,
