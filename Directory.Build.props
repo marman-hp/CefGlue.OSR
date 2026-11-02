@@ -4,7 +4,7 @@
         <DotnetVersion>net10.0</DotnetVersion>
         <LangVersion>latest</LangVersion>
         <CefRedistVersion>154.0.33</CefRedistVersion>
-        <AvaloniaVersion>12.1.1</AvaloniaVersion>
+        <AvaloniaVersion>12.1.4</AvaloniaVersion>
         <CefRedistOSXVersion>154.0.33</CefRedistOSXVersion>
         <CefRedistLinuxVersion>154.0.33</CefRedistLinuxVersion>
         <CefBuildVersion>154.0.33+ga03e714+chromium-154.0.8037.94</CefBuildVersion>
