@@ -16,8 +16,6 @@ namespace Xilium.CefGlue.GTK.Interop
     {
         private const string GtkLibrary = "libgtk-4.so.1";
 
-        // Window gdk_x11_surface_get_xid(GdkSurface* surface); - Window/XID is an unsigned long,
-        // same width as IntPtr on every platform this project targets (64-bit Linux).
         [DllImport(GtkLibrary, EntryPoint = "gdk_x11_surface_get_xid")]
         private static extern IntPtr SurfaceGetXidUnchecked(IntPtr surface);
 

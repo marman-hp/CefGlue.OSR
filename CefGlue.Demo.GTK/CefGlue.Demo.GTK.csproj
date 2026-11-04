@@ -12,8 +12,6 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
 
-  <!--<Import Project="$(ProjectDir)..\CefGlue.CopyLocal.props" />-->
-
   <ItemGroup>
     <ProjectReference Include="..\CefGlue.GTK\CefGlue.GTK.csproj" />
     <ProjectReference Include="..\CefGlue.BrowserProcess\CefGlue.BrowserProcess.csproj" />

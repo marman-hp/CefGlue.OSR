@@ -60,7 +60,6 @@ namespace Xilium.CefGlue.Demo.GTK
             _navigationBar.SetMarginStart(4);
             _navigationBar.SetMarginEnd(4);
 
-            // Page on the left, DevTools docked on the right once opened (Chrome-style).
             _splitter = Paned.New(Orientation.Horizontal);
             _splitter.Vexpand = true;
             _splitter.SetStartChild(Browser.Widget);
@@ -133,7 +132,6 @@ namespace Xilium.CefGlue.Demo.GTK
                 WindowlessFrameRate = 60,
                 BackgroundColor = new CefColor(255, 255, 255, 255),
             },
-            // Must match CefGlueGtkFlags.GetRecommendedFlags(useTexture) - see Program.
             SetupCefWindowInfo = () =>
             {
                 var windowInfo = CefWindowInfo.Create();
@@ -167,7 +165,6 @@ namespace Xilium.CefGlue.Demo.GTK
             header.Append(title);
             header.Append(closeButton);
 
-            // Same grey as the window chrome (nav bar, status bar) instead of the page's white.
             const uint StyleProviderPriorityApplication = 600;
             var headerCss = CssProvider.New();
             headerCss.LoadFromString(
@@ -181,7 +178,6 @@ namespace Xilium.CefGlue.Demo.GTK
             _devToolsPanel.SetSizeRequest(320, -1);
             _splitter.SetEndChild(_devToolsPanel);
 
-            // Page gets ~60% of the width, DevTools the rest.
             var width = _splitter.GetWidth();
             _splitter.SetPosition(width > 0 ? (int)(width * 0.6) : 600);
         }
@@ -253,7 +249,6 @@ namespace Xilium.CefGlue.Demo.GTK
                     return true;
                 }
 
-                // Runs on the GTK main loop itself.
                 _owner.CreatePopupBrowser(ref client, ref extraInfo, windowInfo, popupFeatures, targetDisposition);
                 return false;
             }

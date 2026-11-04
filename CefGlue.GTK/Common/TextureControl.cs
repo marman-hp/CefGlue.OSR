@@ -31,16 +31,7 @@ namespace Xilium.CefGlue.GTK.Common
             _glArea = GLArea.New();
             _glArea.Focusable = true;
             _glArea.AutoRender = false;
-            // No HasAlpha/SetHasAlpha binding in GirCore 0.8.1's Gtk.GLArea wrapper (confirmed via
-            // compiler - not present on the type at all). Page transparency still round-trips
-            // through the shader's own alpha-blended draw (DrawFrame's premultiplied GL_BLEND) -
-            // this only controls whether the GdkGLContext's own framebuffer allocates an alpha
-            // channel at the GL level; if transparent-background pages don't show the surroundings
-            // correctly, that's the next thing to check (may need raw P/Invoke like EglInterop/
-            // GlInterop if GirCore never adds this binding).
 
-            // See BaseCefControl.ReportAllocatedSize's remarks (same rationale as BitmapControl's
-            // identical tick callback).
             _glArea.AddTickCallback((widget, frameClock) =>
             {
                 ReportAllocatedSize(widget.GetWidth(), widget.GetHeight());
@@ -53,8 +44,6 @@ namespace Xilium.CefGlue.GTK.Common
 
         public override void FocusContent() => _glArea.GrabFocus();
 
-        // Info overlay. BitmapControl burns its text into the CPU frame; there is no CPU frame here, so
-        // it's a plain label that CefGlueBrowser layers over the GLArea.
         private Label _infoLabel;
         private GtkTextureRenderSurface _renderSurface;
         private readonly System.Diagnostics.Stopwatch _fpsStopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -91,13 +80,8 @@ namespace Xilium.CefGlue.GTK.Common
             renderSurface.AttachGLArea(_glArea);
         }
 
-        // GTK thread.
         private void OnFrameRendered() => _frameCount++;
 
-        // GTK thread, every frame-clock tick. Driven by the tick, not by OnFrameRendered, so the label
-        // still shows (and FPS drops to 0) while the page is idle - e.g. while DevTools is in use. Only
-        // touches the label when the text changes (about once a second): SetText re-lays-out the
-        // Gtk.Overlay, and doing that per frame (twice per frame with DevTools open) made it blink.
         private void UpdateInfoLabel()
         {
             if (_infoLabel == null)

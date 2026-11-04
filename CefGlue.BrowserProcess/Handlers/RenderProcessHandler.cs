@@ -74,6 +74,31 @@ namespace Xilium.CefGlue.BrowserProcess.Handlers
             }, frame);
         }
 
+        protected override void OnFocusedNodeChanged(CefBrowser browser, CefFrame frame, CefDomNode node)
+        {
+            WithErrorHandling(() =>
+            {
+                using (CefObjectTracker.StartTracking())
+                {
+                    base.OnFocusedNodeChanged(browser, frame, node);
+
+                    var target = frame ?? browser.GetFocusedFrame() ?? browser.GetMainFrame();
+                    if (target == null)
+                    {
+                        return;
+                    }
+
+                    // OSR IME: the browser side turns the IME off while a password field is focused.
+                    var message = new Messages.FocusedPasswordChanged()
+                    {
+                        IsPassword = node != null && node.IsFormControlElement &&
+                                     node.FormControlElementType == CefDomFormControlType.InputPassword
+                    };
+                    target.SendProcessMessage(CefProcessId.Browser, message.ToCefProcessMessage());
+                }
+            }, frame);
+        }
+
         protected override void OnUncaughtException(CefBrowser browser, CefFrame frame, CefV8Context context, CefV8Exception exception, CefV8StackTrace stackTrace)
         {
             WithErrorHandling(() =>

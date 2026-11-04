@@ -20,7 +20,6 @@ namespace Xilium.CefGlue.GTK
             if (request.Opener.Widget.GetRoot() is Window owner)
             {
                 window.TransientFor = owner;
-                // Part of the same GApplication, so it doesn't keep or end the app on its own.
                 window.Application = owner.Application;
             }
 
@@ -37,8 +36,6 @@ namespace Xilium.CefGlue.GTK
             public WindowPopupHost(Window window)
             {
                 _window = window;
-                // close-request runs before the window is destroyed: the browser is closed while its
-                // widget is still in the window. Window.Close() emits it too.
                 _window.OnCloseRequest += (_, _) =>
                 {
                     RaiseClosed();

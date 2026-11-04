@@ -10,7 +10,6 @@ namespace Xilium.CefGlue.GTK
         public static CefGlueBuilder UseGtk(this CefGlueBuilder builder)
         {
             builder.Services.AddSingleton<ICefGlueBrowserFactory, GtkCefGlueBrowserFactory>();
-            // Try: an app's own presenter registered before UseGtk() wins.
             builder.Services.TryAddCoordinator<IPopupPresenter<CefGlueBrowser>, WindowPopupPresenter>();
             return builder;
         }

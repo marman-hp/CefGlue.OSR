@@ -10,7 +10,7 @@ namespace Xilium.CefGlue.Common.Helpers
 {
     public static class OverlayDiagnostics
     {
-        public static string CefVersion { get; } = CefRuntime.ChromeVersion;
+        public static string CefVersion { get; } = CefRuntime.CefVersion;
 
         private const int MaxDisplayNameLength = 15;
 

@@ -64,9 +64,6 @@ namespace Xilium.CefGlue.Demo.Avalonia
                 appBuilder = appBuilder.With(new X11PlatformOptions
                 {
                     RenderingMode = new[] { X11RenderingMode.Egl, X11RenderingMode.Glx, X11RenderingMode.Software },
-                    // Avalonia only turns IME (IBus/Fcitx) on by itself for a Chinese, Japanese, Vietnamese or
-                    // Korean user language; an English desktop with Mozc/Pinyin installed would get none.
-                    EnableIme = true,
                 });
             }
 

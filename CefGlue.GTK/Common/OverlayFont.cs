@@ -24,7 +24,6 @@ namespace Xilium.CefGlue.GTK.Common
         public const int GlyphWidth = 5;
         public const int GlyphHeight = 7;
 
-        // Each row is a byte; bit 4 = leftmost column, bit 0 = rightmost column of the 5-wide glyph.
         private static readonly System.Collections.Generic.Dictionary<char, byte[]> Glyphs = new()
         {
             ['0'] = new byte[] { 0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110 },

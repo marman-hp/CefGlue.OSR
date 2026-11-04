@@ -230,6 +230,40 @@ namespace Xilium.CefGlue.Common.Shared.RendererProcessCommunication
             }
         }
 
+        /// <summary>
+        /// Renderer -> browser: the focused node of a frame is / is no longer an
+        /// &lt;input type=password&gt;. CEF's OnVirtualKeyboardRequested reports a password field
+        /// like any text field (CEF #4127), so OSR hosts would otherwise keep the IME on and
+        /// show the password in its candidate window.
+        /// </summary>
+        public struct FocusedPasswordChanged
+        {
+            public const string Name = nameof(FocusedPasswordChanged);
+
+            public bool IsPassword;
+
+            public CefProcessMessage ToCefProcessMessage()
+            {
+                var message = CefProcessMessage.Create(Name);
+                using (var arguments = message.Arguments)
+                {
+                    arguments.SetBool(0, IsPassword);
+                }
+                return message;
+            }
+
+            public static FocusedPasswordChanged FromCefMessage(CefProcessMessage message)
+            {
+                using (var arguments = message.Arguments)
+                {
+                    return new FocusedPasswordChanged()
+                    {
+                        IsPassword = arguments.GetBool(0)
+                    };
+                }
+            }
+        }
+
         public struct JsContextReleased
         {
             public const string Name = nameof(JsContextReleased);

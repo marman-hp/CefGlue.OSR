@@ -43,11 +43,9 @@ namespace Xilium.CefGlue.GTK
     /// </summary>
     internal sealed class GtkTextureRenderSurface : OffScreenRenderSurface
     {
-        private const uint DrmFormatArgb8888 = 0x34325241; // fourcc('A','R','2','4') - CefColorType.Bgra8888
-        private const uint DrmFormatAbgr8888 = 0x34324241; // fourcc('A','B','2','4') - CefColorType.Rgba8888
+        private const uint DrmFormatArgb8888 = 0x34325241;
+        private const uint DrmFormatAbgr8888 = 0x34324241;
 
-        // pos.xy, texcoord.uv - GL_TRIANGLE_STRIP order (BL, BR, TL, TR). See class remarks on
-        // texcoord V-axis orientation being unproven without live testing.
         private static readonly float[] QuadVertices =
         {
             -1f, -1f,   0f, 1f,
@@ -56,9 +54,6 @@ namespace Xilium.CefGlue.GTK
              1f,  1f,   1f, 0f,
         };
 
-        // Guards _glArea/_textureId/_disposed against the UI-thread-close-vs-CEF-paint-thread race,
-        // same rationale as WinUITextureRenderSurface's/AvaloniaTextureRenderSurface's _deviceLock
-        // and this class's own Picture-based sibling's _pictureLock.
         private readonly object _glLock = new object();
         private GLArea _glArea;
         private bool _disposed;
@@ -70,9 +65,6 @@ namespace Xilium.CefGlue.GTK
         private int _textureUniformLocation;
         private bool _useEs;
 
-        // Captured on construction (GTK main thread) - every Gtk/Gdk/GL/EGL call in this class MUST
-        // run on this context, never on whatever thread CEF's OnAcceleratedPaint callback fired on
-        // (GTK/GDK/GL are not thread-safe - confirmed live elsewhere in this codebase).
         private readonly SynchronizationContext _uiContext = SynchronizationContext.Current;
 
         public int CurrentWidth { get; private set; }
@@ -93,8 +85,6 @@ namespace Xilium.CefGlue.GTK
             glArea.OnUnrealize += (_, _) => CleanupGL();
             glArea.OnRender += (_, _) =>
             {
-                // GtkGLArea makes its context current before emitting "render", so the import and the
-                // draw both happen on the GTK thread in GTK's own GL context.
                 var imported = ImportPendingFrame();
                 DrawFrame();
                 if (imported)
@@ -137,8 +127,6 @@ namespace Xilium.CefGlue.GTK
             var error = _glArea.GetError();
             if (error != null)
             {
-                // Can't render - _program/_textureId stay 0, DrawFrame's own guard skips drawing
-                // rather than crashing on unusable GL resources.
                 return;
             }
 
@@ -175,9 +163,6 @@ namespace Xilium.CefGlue.GTK
 
         private void CleanupGL()
         {
-            // An unrealized GLArea has no context: MakeCurrent only logs a GTK critical, and the GL
-            // calls below would then hit whichever context is current (another tab's). The unrealize
-            // handler already released everything in that case.
             if (_glArea == null || !_glArea.GetRealized())
             {
                 return;
@@ -193,8 +178,6 @@ namespace Xilium.CefGlue.GTK
             }
             catch
             {
-                // Widget's native surface may already be gone by the time unrealize runs during
-                // teardown - nothing left to make current, nothing left to clean up either.
                 return;
             }
 
@@ -217,10 +200,6 @@ namespace Xilium.CefGlue.GTK
                 return;
             }
 
-            // CEF's accelerated buffers are premultiplied (mirrors the Picture-based sibling's own
-            // DmabufTextureBuilder.Premultiplied = true) - GL_ONE/GL_ONE_MINUS_SRC_ALPHA is the
-            // correct premultiplied-over blend, not the more commonly seen GL_SRC_ALPHA/
-            // GL_ONE_MINUS_SRC_ALPHA (that pairing is for STRAIGHT/non-premultiplied alpha).
             GlInterop.glEnable(GlInterop.GL_BLEND);
             GlInterop.glBlendFunc(GlInterop.GL_ONE, GlInterop.GL_ONE_MINUS_SRC_ALPHA);
 
@@ -276,8 +255,6 @@ namespace Xilium.CefGlue.GTK
             return program;
         }
 
-        // Runs on the CEF thread: CEF's plane fds are only valid inside OnAcceleratedPaint, so
-        // DeliverAcceleratedFrame has to dup() them before anything is handed to the GTK thread.
         protected override Task ExecuteInUIThread(Action action)
         {
             action();
@@ -291,8 +268,6 @@ namespace Xilium.CefGlue.GTK
 
         protected override void DeliverSoftwareFrame(IntPtr buffer, int width, int height, CefRectangle[] dirtyRects)
         {
-            // A shared-texture browser only gets OnPaint when CEF isn't GPU compositing (GPU process
-            // failed or blocklisted, or --disable-gpu). Nothing to draw it with here; say so once.
             if (!_softwareFrameReported)
             {
                 _softwareFrameReported = true;
@@ -300,7 +275,6 @@ namespace Xilium.CefGlue.GTK
             }
         }
 
-        // CEF thread: dup the plane fds and hand the latest frame to the GTK thread.
         protected override void DeliverAcceleratedFrame(CefAcceleratedPaintInfo info, CefRectangle[] dirtyRects)
         {
             var width = info.Extra.CodedSize.Width;
@@ -348,7 +322,6 @@ namespace Xilium.CefGlue.GTK
                     return;
                 }
 
-                // Only the newest frame is worth importing.
                 previous = _pendingFrame;
                 _pendingFrame = frame;
             }
@@ -363,7 +336,6 @@ namespace Xilium.CefGlue.GTK
             }, null);
         }
 
-        // GTK thread, inside "render" (context current). True when a new frame was imported.
         private bool ImportPendingFrame()
         {
             PendingFrame frame;
@@ -409,7 +381,6 @@ namespace Xilium.CefGlue.GTK
                 var image = EglInterop.eglCreateImageKHR(display, EglInterop.EGL_NO_CONTEXT, EglInterop.EGL_LINUX_DMA_BUF_EXT, IntPtr.Zero, attribs.ToArray());
                 if (image == EglInterop.EGL_NO_IMAGE_KHR)
                 {
-                    // Drop this frame; the next one gets another chance.
                     ReportOnce($"eglCreateImageKHR failed (fourcc 0x{frame.FourCc:X8}, modifier 0x{frame.Modifier:X16}).");
                     return false;
                 }
@@ -417,7 +388,6 @@ namespace Xilium.CefGlue.GTK
                 GlInterop.glBindTexture(GlInterop.GL_TEXTURE_2D, _textureId);
                 GlInterop.glEGLImageTargetTexture2DOES(GlInterop.GL_TEXTURE_2D, image);
 
-                // The texture keeps its own reference to the dma-buf.
                 EglInterop.eglDestroyImageKHR(display, image);
 
                 CurrentWidth = frame.Width;
@@ -488,8 +458,6 @@ namespace Xilium.CefGlue.GTK
                 }
                 catch
                 {
-                    // Best-effort - the widget/window may already be torn down by the time this
-                    // posted callback runs.
                 }
             }, null);
 

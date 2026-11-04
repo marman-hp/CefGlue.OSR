@@ -163,9 +163,6 @@ namespace Xilium.CefGlue.GTK.Interop
             glGetError = Load<GetErrorDelegate>("glGetError");
             glEnable = Load<EnableDelegate>("glEnable");
             glBlendFunc = Load<BlendFuncDelegate>("glBlendFunc");
-            // OES extension - genuinely has no static export anywhere, ALWAYS resolved dynamically
-            // even on desktop GL (unlike the core functions above, which are only resolved this way
-            // for portability - see class remarks).
             glEGLImageTargetTexture2DOES = Load<EGLImageTargetTexture2DOESDelegate>("glEGLImageTargetTexture2DOES");
 
             _loaded = true;

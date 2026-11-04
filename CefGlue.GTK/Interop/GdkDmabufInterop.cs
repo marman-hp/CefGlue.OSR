@@ -20,12 +20,9 @@ namespace Xilium.CefGlue.GTK.Interop
         private const string GtkLibrary = "libgtk-4.so.1";
         private const string GLibLibrary = "libglib-2.0.so.0";
 
-        // GdkTexture* gdk_dmabuf_texture_builder_build(GdkDmabufTextureBuilder* self,
-        //     GDestroyNotify destroy, gpointer data, GError** error); (GTK >= 4.14)
         [DllImport(GtkLibrary, EntryPoint = "gdk_dmabuf_texture_builder_build")]
         public static extern IntPtr DmabufTextureBuilderBuild(IntPtr self, IntPtr destroy, IntPtr data, out IntPtr error);
 
-        // void gdk_texture_download(GdkTexture* texture, guchar* data, gsize stride);
         [DllImport(GtkLibrary, EntryPoint = "gdk_texture_download")]
         public static extern void TextureDownload(IntPtr texture, IntPtr data, UIntPtr stride);
 

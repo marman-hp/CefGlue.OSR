@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,6 +10,7 @@ using Xilium.CefGlue.Common.Helpers.Logger;
 using Xilium.CefGlue.Common.InternalHandlers;
 using Xilium.CefGlue.Common.Platform;
 using Xilium.CefGlue.Common.Shared.Helpers;
+using Xilium.CefGlue.Common.Shared.RendererProcessCommunication;
 
 namespace Xilium.CefGlue.Common
 {
@@ -181,9 +183,50 @@ namespace Xilium.CefGlue.Common
             var renderHandler = new CommonCefRenderHandler(_renderCallback, () => RenderHandler, _logger)
             {
                 ImeBoundsChanged = (range, bounds) => Target?.UpdateImeCompositionBounds(range, bounds),
-                TextInputActiveChanged = active => Target?.SetTextInputActive(active),
+                TextInputActiveChanged = HandleTextFieldFocusChanged,
             };
-            return new CommonCefClient(this, renderHandler, _logger, _host);
+            var cefClient = new CommonCefClient(this, renderHandler, _logger, _host);
+            cefClient.Dispatcher.RegisterMessageHandler(Messages.FocusedPasswordChanged.Name, HandleFocusedPasswordChanged);
+            return cefClient;
+        }
+
+        // IME gate (CEF #4127): OnVirtualKeyboardRequested reports a password field like any text
+        // field, so the renderer tells us separately (FocusedPasswordChanged, per frame) and the
+        // IME stays off while a password field is focused - same as Chrome. Both arrive on CEF's
+        // UI thread.
+        private bool _textFieldFocused;
+        private readonly Dictionary<string, bool> _passwordFocusedByFrame = new Dictionary<string, bool>();
+
+        private void HandleTextFieldFocusChanged(bool focused)
+        {
+            _textFieldFocused = focused;
+            if (!focused)
+            {
+                _passwordFocusedByFrame.Clear();
+                Target?.SetPasswordFieldFocused(false);
+            }
+            UpdateTextInputActive();
+        }
+
+        private void HandleFocusedPasswordChanged(MessageReceivedEventArgs e)
+        {
+            var isPassword = Messages.FocusedPasswordChanged.FromCefMessage(e.Message).IsPassword;
+            var frameId = e.Frame?.Identifier ?? string.Empty;
+            if (isPassword)
+            {
+                _passwordFocusedByFrame[frameId] = true;
+            }
+            else
+            {
+                _passwordFocusedByFrame.Remove(frameId);
+            }
+            Target?.SetPasswordFieldFocused(_passwordFocusedByFrame.Count > 0);
+            UpdateTextInputActive();
+        }
+
+        private void UpdateTextInputActive()
+        {
+            Target?.SetTextInputActive(_textFieldFocused && _passwordFocusedByFrame.Count == 0);
         }
 
         protected override void SetupBrowserView(CefWindowInfo windowInfo, int width, int height, IntPtr hostViewHandle)

@@ -16,9 +16,6 @@ namespace Xilium.CefGlue.GTK.Interop
     {
         private const string GtkLibrary = "libgtk-4.so.1";
 
-        // GdkContentProvider* gdk_content_provider_new_union(GdkContentProvider** providers, gsize n_providers);
-        // Takes ownership of each provider in the array; returns a new, separately-owned union
-        // provider - wrap the result via Gdk.ContentProvider.NewFromPointer(ptr, ownsHandle: true).
         [DllImport(GtkLibrary, EntryPoint = "gdk_content_provider_new_union")]
         public static extern System.IntPtr NewUnion(System.IntPtr[] providers, System.UIntPtr nProviders);
     }

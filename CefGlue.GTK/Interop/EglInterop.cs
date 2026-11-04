@@ -58,8 +58,6 @@ namespace Xilium.CefGlue.GTK.Interop
         [DllImport(EglLibrary)]
         public static extern IntPtr eglGetProcAddress(string procname);
 
-        // EGL_KHR_image_base entry points: extensions, so libglvnd's libEGL.so.1 doesn't export them -
-        // they have to come from eglGetProcAddress.
         public delegate IntPtr CreateImageKHRDelegate(IntPtr dpy, IntPtr ctx, int target, IntPtr buffer, int[] attribList);
         public delegate uint DestroyImageKHRDelegate(IntPtr dpy, IntPtr image);
 

@@ -1,108 +1,196 @@
 # CefGlue.OSR
 
-**.NET bindings for the Chromium Embedded Framework (CEF), focused on off-screen rendering (OSR)**,
-with ready-to-use browser controls for **WinForms, WPF, WinUI 3, Avalonia and GTK4**.
+**Cross-platform Chromium Off-Screen Rendering for .NET**
 
-CefGlue.OSR started from [CefGlue](https://github.com/OutSystems/CefGlue) (OutSystems), itself a
-continuation of the original Xilium CefGlue. The shared host logic was reworked into coordinators
-in `CefGlue.Common`, so every UI framework gets the same behaviour from a thin platform layer.
+A CEF-based browser implementation with GPU-accelerated rendering, native input handling, and ready-to-use browser controls for **WinForms, WPF, WinUI 3, Avalonia and GTK4**.
 
-> Status: **Windows x64** (WinForms, WPF, WinUI 3, Avalonia) and **Linux x64** (Avalonia, GTK4).
-> No NuGet packages yet - build from source.
+The same shared codebase is also used to develop **CAS (CEF as a Service)**.
+
+---
+
+## Overview
+
+CefGlue.OSR brings Chromium's Off-Screen Rendering (OSR) capabilities to the .NET ecosystem.
+
+CefGlue.OSR started as a fork of [OutSystems/CefGlue](https://github.com/OutSystems/CefGlue), itself derived from the original Xilium CefGlue project. The codebase has since been modified and extended with OSR support and browser controls for multiple .NET UI frameworks.
+
+Browser lifecycle, rendering coordination, and event handling are implemented in framework-independent coordinators within `CefGlue.Common`.
+
+The architecture uses **Microsoft.Extensions.DependencyInjection** to compose browser services and coordinators through `IServiceCollection`. This keeps the shared browser implementation independent of individual UI frameworks while allowing applications to provide their own services and integrations.
+
+Each UI framework provides a thin platform-specific integration layer over the shared implementation.
+
+**The result:** consistent browser behavior across multiple .NET UI frameworks, backed by a shared implementation and an extensible dependency injection architecture.
+
+## Platform Support
+
+| Platform | WinForms | WPF | WinUI 3 | Avalonia | GTK4 |
+|---|:---:|:---:|:---:|:---:|:---:|
+| Windows x64 | ✓ | ✓ | ✓ | ✓ | — |
+| Linux x64 | — | — | — | ✓ | ✓ |
+
+**Status:** No NuGet packages yet. Build from source.
+
+> **Important: CEF binaries are not included.**
 >
-> **No CEF binaries are included.** This repository holds only source code; download the CEF
-> distribution of the matching version yourself (see [Build](#build)). Apps built on CefGlue.OSR must
-> ship CEF's files next to their executable.
+> This repository contains source code only. You must download the matching CEF distribution separately and deploy its runtime files alongside your application.
+>
+> See [Build](#build) for instructions.
 
 ## Features
 
-- **Off-screen rendering on every host** - a CPU bitmap path and a GPU texture path (WinUI, Avalonia,
-  WinForms/WPF with fallback to CPU when the GPU can't share textures; zero-copy EGL dma-buf on Linux
-  for Avalonia and GTK4).
-- **IME (Japanese, Chinese, Korean, ...)** - real composition, commit and cancel; the candidate window
-  follows the caret and the window.
-  - Windows: WinForms/WPF use a TSF text store, WinUI 3 uses `CoreTextEditContext` (both with per-clause
-    underlines), Avalonia uses its own text input API.
-  - Linux (Avalonia): IBus and Fcitx5 through Avalonia's D-Bus input method, with the preedit drawn in the
-    page. Enable it with `X11PlatformOptions { EnableIme = true }` (Avalonia turns it on by default only
-    for CJK/VI system languages).
-- **Popups in the library** - `window.open` popups (e.g. "Sign in with Google") are created, shown, closed
-  and disposed by the library on every host, including popups that close themselves. Where a popup appears
-  is decided by an `IPopupPresenter<CefGlueBrowser>`; the default is an owned window, and you can replace it
-  (a tab, a dialog, ...):
+### Rendering
 
-  ```csharp
-  builder.Services.ReplaceCoordinator<IPopupPresenter<CefGlueBrowser>, MyPopupPresenter>();
-  ```
+- **CPU rendering** — bitmap-based rendering path.
+- **GPU rendering** — shared texture path for supported hosts.
+- **Fallback support** — WinForms and WPF fall back to CPU rendering when GPU texture sharing is unavailable.
+- **Linux zero-copy rendering** — EGL DMA-BUF support for Avalonia and GTK4.
 
-- **DevTools in OSR** - `ShowDevToolOSR()` docks DevTools into your own panel.
-- **Drag and drop, fullscreen, zoom, JavaScript bindings** and the usual CEF handlers.
-- **Dependency-injection friendly** - the demos (`DemoDI`) show how to plug in your own coordinators.
+### Native Input & IME
+
+Full IME composition support, including preedit, commit, cancel, and candidate-window positioning.
+
+| Platform | Implementation |
+|---|---|
+| WinForms / WPF | Windows TSF text store |
+| WinUI 3 | CoreTextEditContext |
+| Avalonia (Windows) | Avalonia text input API |
+| Avalonia (Linux) | Not supported yet — keys are sent as plain text |
+| GTK4 | Not supported yet — keys are sent as plain text |
+
+Windows implementations support per-clause composition underlines.
+
+Linux IME is not supported yet. Avalonia 12.1's IBus/Fcitx5 integration drops the "the app draws the preedit" capability when it is sent before its D-Bus connection is ready, so the composition stays in the IME's own window. It will be revisited once that is fixed upstream.
+
+### Browser Integration
+
+- Docked DevTools with `ShowDevToolOSR()`.
+- Drag and drop.
+- Fullscreen support.
+- Browser zoom.
+- JavaScript bindings.
+- Standard CEF event handlers.
+- Popup and new-window handling.
+
+### Architecture & Dependency Injection
+
+CefGlue.OSR uses a shared coordinator architecture built around **Microsoft.Extensions.DependencyInjection**.
+
+- **Shared coordinators** — browser lifecycle, rendering coordination, and event handling are implemented independently of UI frameworks.
+- **IServiceCollection integration** — browser services and coordinators can be registered and resolved through the standard .NET dependency injection container.
+- **Framework-specific adapters** — each UI framework provides a thin integration layer over the shared implementation.
+- **Custom service integration** — applications can provide their own services and coordinator implementations.
+- **DI and non-DI usage** — dependency injection is supported without removing the traditional API.
+
+The `DemoDI` projects demonstrate how to integrate CefGlue.OSR using `IServiceCollection`.
 
 ## Demos
 
-Every demo has the same layout and behaviour:
+Every demo provides a consistent browser experience:
 
-- tabs, with back / forward / reload buttons left of the address box
-- DevTools docked on the right in a resizable splitter, toggled with **F12**
-- **Open link in new tab** in the context menu when right-clicking a link
-- popups (Google sign-in and similar) in their own window
+- Tabbed browsing.
+- Back, forward, and reload navigation.
+- Address bar.
+- Docked DevTools in a resizable right-side panel.
+- F12 to toggle DevTools.
+- Open links in new tabs through the context menu.
+- Popups, including Google sign-in, in their own windows.
 
-The CEF cache goes to `cef_temp` next to the demo's executable.
+The CEF cache is stored in `cef_temp` next to the demo executable.
 
 ## Build
 
-Requirements: **.NET 10 SDK**, x64.
+**Requirements**
 
-The CEF version is fixed by `CefBuildVersion` in `Directory.Build.props` (CefGlue's bindings are
-generated for that exact version).
+- .NET 10 SDK
+- x64 environment
+- CEF 154 (154.0.33)
+
+**CEF downloads** (154.0.33, minimal distribution, from the official [CEF builds](https://cef-builds.spotifycdn.com/index.html) site):
+
+- Windows x64: [cef_binary_154.0.33+ga03e714+chromium-154.0.8037.94_windows64_minimal.tar.bz2](https://cef-builds.spotifycdn.com/cef_binary_154.0.33%2Bga03e714%2Bchromium-154.0.8037.94_windows64_minimal.tar.bz2) (~165 MB)
+- Linux x64: [cef_binary_154.0.33+ga03e714+chromium-154.0.8037.94_linux64_minimal.tar.bz2](https://cef-builds.spotifycdn.com/cef_binary_154.0.33%2Bga03e714%2Bchromium-154.0.8037.94_linux64_minimal.tar.bz2) (~311 MB)
+
+The CEF version is defined by `CefBuildVersion` in `Directory.Build.props`. The CefGlue bindings are generated for that exact version.
 
 ### Windows
 
-`get-cef.ps1` downloads the matching Windows 64-bit *minimal* distribution from
-[cef-builds.spotifycdn.com](https://cef-builds.spotifycdn.com/index.html) into
-`cef\runtimes\win-x64\native`:
+Download the matching Windows x64 minimal CEF distribution:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\get-cef.ps1      # once, and after a CEF upgrade
+powershell -ExecutionPolicy Bypass -File .\get-cef.ps1
+
 dotnet build CefGlue.OSR.sln -c Release -p:Platform=x64
 ```
 
-Already have the archive? `.\get-cef.ps1 -FromArchive <path to cef_binary_..._windows64_minimal.tar.bz2>`.
+Already have the CEF archive?
 
-Then run one of the demos from its `bin\x64\Release\net10.0*` folder.
+```powershell
+.\get-cef.ps1 -FromArchive <path-to-cef-archive>
+```
+
+The script downloads and extracts CEF into:
+
+```text
+cef\runtimes\win-x64\native\
+```
+
+Run the demos from their respective `bin\x64\Release\net10.0*` directories.
 
 ### Linux
 
-Build the Avalonia or GTK4 demo on Linux:
+Build the Avalonia or GTK4 demo:
 
 ```bash
 dotnet build CefGlue.Demo.Avalonia/CefGlue.Demo.Avalonia.csproj -c Release -p:Platform=x64
+
 dotnet build CefGlue.Demo.GTK/CefGlue.Demo.GTK.csproj -c Release -p:Platform=x64
 ```
 
-Then download the CEF **Linux 64-bit minimal** distribution of the same version
-(`cef_binary_<version>_linux64_minimal.tar.bz2`, same site) and put it next to the demo, in
-`runtimes/linux-x64/native`: the files from its `Release` folder, plus `Resources/*.pak`,
-`Resources/icudtl.dat` and `Resources/locales/*.pak` (into `locales`).
+Download the matching Linux x64 minimal CEF distribution:
 
-- GTK4 host: GTK **4.14+** (Ubuntu 24.04: `libgtk-4-1`).
-- IME: an input method framework (IBus or Fcitx5) with an engine such as Mozc.
-- Tested on Ubuntu 22.04/24.04 (WSLg); Avalonia also on Ubuntu 24.04 GNOME (Wayland, via XWayland).
+```text
+cef_binary_<version>_linux64_minimal.tar.bz2
+```
 
-## Projects
+Place the runtime files next to the demo:
 
-| Folder | What it is |
+```text
+runtimes/linux-x64/native/
+```
+
+Include:
+
+- Files from the CEF `Release` directory.
+- `Resources/*.pak`
+- `Resources/icudtl.dat`
+- `Resources/locales/*.pak` copied into `locales`.
+
+**System requirements**
+
+- GTK 4.14+ for the GTK4 host (`libgtk-4-1` on Ubuntu 24.04).
+
+Tested on Ubuntu 22.04 and 24.04 (WSLg). Avalonia is also tested on Ubuntu 24.04 GNOME using Wayland through XWayland.
+
+## Project Structure
+
+| Project | Description |
 |---|---|
-| `CefGlue` | Low-level CEF bindings (generated interop + proxies) |
-| `CefGlue.Common`, `CefGlue.Common.Shared` | Framework-independent browser logic: coordinators, handlers, OSR adapter |
-| `CefGlue.BrowserProcess` | CEF sub-process executable |
-| `CefGlue.WinForms`, `CefGlue.WPF`, `CefGlue.WinUI`, `CefGlue.Avalonia`, `CefGlue.GTK` | Browser controls per UI framework |
-| `CefGlue.Demo.*` | Demo apps, one per framework |
+| `CefGlue` | Low-level CEF bindings, generated interop and proxies |
+| `CefGlue.Common` | Shared browser coordinators, handlers and OSR adapter |
+| `CefGlue.Common.Shared` | Code shared by the host and the CEF subprocess: CEF app, custom schemes, renderer-process messaging |
+| `CefGlue.BrowserProcess` | CEF subprocess executable |
+| `CefGlue.WinForms` | WinForms browser control |
+| `CefGlue.WPF` | WPF browser control |
+| `CefGlue.WinUI` | WinUI 3 browser control |
+| `CefGlue.Avalonia` | Avalonia browser control |
+| `CefGlue.GTK` | GTK4 browser control |
+| `CefGlue.Demo.*` | Framework-specific demo applications |
 | `CefGlue.Ime.Harness` | Console test for the TSF text store |
-| `CefGlue.Tests` | Tests |
+| `CefGlue.Tests` | Automated tests |
 
 ## License
 
-MIT - see `LICENSE` (Xilium CefGlue authors) and the `LICENSE` files in the project folders.
-CEF/Chromium: BSD (`cef\LICENSE-cef.txt` after running `get-cef.ps1`).
+MIT License. See `LICENSE` (Xilium CefGlue authors) and individual project license files.
+
+CEF/Chromium is distributed under its BSD license. See `cef/LICENSE-cef.txt` after downloading CEF.

@@ -46,9 +46,6 @@ namespace Xilium.CefGlue.GTK.Common
 
         private IFrameSurface<byte[]> _surface;
 
-        // Overlay FPS counter state - see DrawInfoOverlay. Counts frames actually presented to
-        // UpdateTexture (UI-thread side), not raw CEF OnPaint calls, matching WinForms'/WPF's
-        // BitmapControl (same rationale: what the user visually sees, not internal paint churn).
         private readonly Stopwatch _fpsStopwatch = Stopwatch.StartNew();
         private int _frameCount;
         private int _fps;
@@ -56,10 +53,6 @@ namespace Xilium.CefGlue.GTK.Common
 
         public BitmapControl()
         {
-            // Captured here (constructed on the GTK main thread, same thread
-            // Application.RunWithSynchronizationContext installs the context on) so OnFrameReady
-            // (called from CEF's own thread) can marshal back onto the GTK main loop instead of
-            // touching the widget directly from a non-GTK thread.
             _uiContext = SynchronizationContext.Current;
 
             _picture = Picture.New();
@@ -67,8 +60,6 @@ namespace Xilium.CefGlue.GTK.Common
             _picture.CanShrink = true;
             _picture.Focusable = true;
 
-            // See BaseCefControl.ReportAllocatedSize's remarks for why this reports every tick
-            // unconditionally but SizeChanged itself only fires once a resize has settled.
             _picture.AddTickCallback((widget, frameClock) =>
             {
                 ReportAllocatedSize(widget.GetWidth(), widget.GetHeight());
@@ -80,18 +71,6 @@ namespace Xilium.CefGlue.GTK.Common
 
         public override void FocusContent()
         {
-            // Reverted back to unconditional (2026-08-11) - the HasFocus guard added 2026-08-07 to
-            // avoid disturbing an in-progress scrollbar-drag gesture right after a resize (see git
-            // history/project memory for that finding) traded a minor one-time hiccup for a much
-            // worse regression: confirmed live via diagnostic logging that _picture.HasFocus stays
-            // TRUE across a resize even when CEF's OWN internal focus state has actually been lost
-            // (GTK-level focus and CEF-level focus genuinely desync independently - resizing alone
-            // doesn't change GTK's own idea of "is this widget focused" even when it DOES cause CEF
-            // to drop focus internally), so the guard was skipping GrabFocus() every single time,
-            // permanently stuck needing a manual click to recover - strictly worse than the
-            // scrollbar hiccup it was meant to avoid. User explicitly chose reverting to
-            // unconditional over building proper CEF-side focus-state tracking, accepting the
-            // scrollbar-drag-hiccup trade-off again for now.
             _picture.GrabFocus();
         }
 
@@ -143,17 +122,10 @@ namespace Xilium.CefGlue.GTK.Common
                 return;
             }
 
-            // CEF's OSR buffer is tightly packed BGRA, premultiplied alpha, no row padding -
-            // Gdk.MemoryFormat.B8g8r8a8Premultiplied matches that byte order exactly, and
-            // MemoryTexture accepts an arbitrary stride directly (unlike Cairo.ImageSurface, no
-            // cairo-alignment-driven repacking needed).
             var stride = frameWidth * 4;
 
             if (_surface != null && _surface.ShowOverlayInfo)
             {
-                // frame came from GtkBitmapSurface.GetFrameSurface(), which already returns a
-                // fresh clone (see its remarks) - safe to mutate in place here, doesn't touch the
-                // shared front buffer other callers might still be reading.
                 DrawInfoOverlay(frame, frameWidth, frameHeight, stride);
             }
 
@@ -162,16 +134,8 @@ namespace Xilium.CefGlue.GTK.Common
             _picture.SetPaintable(texture);
         }
 
-        // Burns the debug info overlay straight into the BGRA frame buffer, BEFORE it's ever
-        // wrapped into a Gdk.Texture - see OverlayFont's class remarks for why this doesn't go
-        // through Cairo/GSK at all. Mirrors CefGlue.WinForms' BitmapControl.DrawInfoOverlay in
-        // content/layout, minus the GDI+-specific text metrics (fixed 5x7 bitmap font here
-        // instead of a real font, so box sizing is just a character count multiply, not
-        // MeasureString).
         private void DrawInfoOverlay(byte[] frame, int width, int height, int stride)
         {
-            // Cheap after the first call - actual sampling runs on a background timer, never on
-            // this (UI) thread. See OverlayDiagnostics.EnsureBackgroundSampling's doc comment.
             OverlayDiagnostics.EnsureBackgroundSampling();
 
             _frameCount++;
@@ -208,11 +172,8 @@ namespace Xilium.CefGlue.GTK.Common
             var boxWidth = Math.Min(width, padding * 2 + maxChars * charAdvance);
             var boxHeight = Math.Min(height, padding * 2 + lines.Length * lineAdvance);
 
-            // Top-right corner, not top-left - boxOriginX is where the box (and the text inside
-            // it) starts on the X axis.
             var boxOriginX = Math.Max(0, width - boxWidth);
 
-            // Semi-transparent purple background, matching WinForms' Color.FromArgb(150, Color.Purple).
             for (var y = 0; y < boxHeight; y++)
             {
                 var rowOffset = y * stride;
@@ -274,9 +235,6 @@ namespace Xilium.CefGlue.GTK.Common
             }
         }
 
-        // Alpha-blends a straight-alpha (r,g,b,a) source pixel onto a premultiplied-alpha BGRA
-        // destination in place - matches the B8g8r8a8Premultiplied format UpdateTexture wraps this
-        // same buffer in right after this runs.
         private static void BlendPixel(byte[] buffer, int offset, byte r, byte g, byte b, byte a)
         {
             if (a == 0)

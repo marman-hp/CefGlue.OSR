@@ -73,14 +73,8 @@ namespace Xilium.CefGlue.GTK.Common
         /// </summary>
         public event Action<int, int> SizeChanged;
 
-        // A handful of ~60fps tick-callback frames (~50ms at that rate) - matches
-        // CefGlue.Avalonia's ResizeSettleMilliseconds constant, same debounce technique for the same
-        // reason (see SizeChanged's remarks).
         private const int SettleTickThreshold = 3;
 
-        // Same value/rationale as CefGlue.Avalonia's identical constant - the quiet-gap threshold
-        // X11ResizeWatcher waits for before considering a resize settled (subject to the button-
-        // release gate on top of it - see TryStartX11ResizeWatcher).
         private const int ResizeSettleMilliseconds = 50;
 
         private int _lastCandidateWidth = -1;
@@ -89,17 +83,6 @@ namespace Xilium.CefGlue.GTK.Common
         private int _lastReportedWidth = -1;
         private int _lastReportedHeight = -1;
 
-        // Real mouse-release-gated settle detection (X11ResizeWatcher, ConfigureNotify + a live
-        // XQueryPointer button check on a second independent Xlib connection) - mirrors
-        // CefGlue.Avalonia's identical X11ResizeWatcher use on Linux. Replaces the tick-callback
-        // settle-count heuristic above (SettleTickThreshold-consecutive-stable-frames) whenever it
-        // can start successfully: that heuristic only infers "probably released" from an absence of
-        // size change, so a user pausing mid-drag without releasing the button already fired a
-        // premature settle - confirmed live (2026-08-15) as visibly different from Avalonia's own
-        // Linux behavior, which gates on the actual button state and stays ghosted the whole time
-        // the button is held regardless of pauses. Falls back to the tick-callback path unchanged
-        // if the watcher can't start (XID unresolvable, second X11 connection fails to open, or a
-        // non-Linux/non-X11 GTK backend).
         private X11ResizeWatcher _x11ResizeWatcher;
         private bool _watcherInitAttempted;
         private SynchronizationContext _uiContext;
@@ -118,19 +101,6 @@ namespace Xilium.CefGlue.GTK.Common
         {
             if (!UseSafeResize)
             {
-                // No ReclaimFocusAfterResize() here, unlike the UseSafeResize branch below -
-                // confirmed live (2026-08-07): this branch is also what the popup's own
-                // BitmapControl goes through (CefGlueBrowser.CreatePopupHost leaves
-                // _popupSelectControl.UseSafeResize at its false default - popups aren't
-                // drag-resized by the user), and every CEF-driven MoveAndResize while a <select>
-                // dropdown is opening fires this immediately, no debounce. Grabbing focus on the
-                // popup's content widget on every one of those resizes fought with CEF's own
-                // popup show/hide state machine badly enough to make the dropdown flicker
-                // open/closed a few times before settling - the popup was never supposed to need
-                // real keyboard focus at all (see PopupControlHost.Focus()'s own remarks, CEF
-                // tracks main-view-vs-popup focus internally via SetFocus). The main content
-                // control never takes this branch (UseSafeResize=true there), so this doesn't
-                // regress the original resize-loses-focus fix.
                 if (width != _lastReportedWidth || height != _lastReportedHeight)
                 {
                     _lastReportedWidth = width;
@@ -149,14 +119,8 @@ namespace Xilium.CefGlue.GTK.Common
 
             if (_x11ResizeWatcher?.IsResizing == true)
             {
-                // The user is resizing the window: the watcher's onResizeSettled callback reports the
-                // size once the button is released - nothing to do here per-tick.
                 return;
             }
-
-            // No window resize in progress: size changes that never touch the toplevel (a control
-            // created into an already-mapped window, e.g. a new notebook tab, or sibling widgets
-            // shown/hidden) produce no ConfigureNotify, so they still settle through the tick path.
 
             if (width == _lastCandidateWidth && height == _lastCandidateHeight)
             {
@@ -169,8 +133,6 @@ namespace Xilium.CefGlue.GTK.Common
                 _stableTickCount = 0;
             }
 
-            // Exact equality, not >=, so this fires exactly once per settle - _stableTickCount keeps
-            // climbing harmlessly past the threshold for as long as the size stays put afterward.
             if (_stableTickCount == SettleTickThreshold &&
                 (width != _lastReportedWidth || height != _lastReportedHeight))
             {
@@ -233,8 +195,6 @@ namespace Xilium.CefGlue.GTK.Common
 
                 _x11ResizeWatcher = watcher.Start() ? watcher : null;
 
-                // TEMP DIAGNOSTIC (2026-08-15) - resize-behavior-parity verification, remove once
-                // confirmed stable. Prints once per control, at first resize.
                 Console.Error.WriteLine(_x11ResizeWatcher != null
                     ? "[RESIZE] X11ResizeWatcher started - button-release-gated settle active."
                     : "[RESIZE] X11ResizeWatcher failed to start - falling back to tick-callback settle.");
@@ -245,19 +205,8 @@ namespace Xilium.CefGlue.GTK.Common
             }
         }
 
-        // GTK4 doesn't have an equivalent of Win32's WM_ENTERSIZEMOVE/EXITSIZEMOVE modal resize
-        // loop (see CefGlue.WPF/WinForms/WinUI/Avalonia's own OnSafeResize/Control_Resize
-        // remarks), but confirmed live (2026-08-07) keyboard focus is still lost after a
-        // drag-resize on GTK too - both drag interactions inside the page (e.g. a scrollbar
-        // thumb) and plain typing stop reaching CEF until the content area is clicked again. GTK
-        // has no CefControl&lt;TControl&gt; wrapper (this head is OSR-only, never needed the
-        // windowed-mode host abstraction the other heads use), so there's nowhere else this
-        // reclaim was already happening - FocusContent() (GrabFocus on the underlying Picture/
-        // texture widget) re-fires the EventControllerFocus enter callback in
-        // OffScreenControlHost, which is what actually calls BrowserHost.SetFocus(true).
         private void ReclaimFocusAfterResize()
         {
-            // TEMP DIAGNOSTIC (2026-08-11) - resize-lostfocus investigation, remove once resolved.
             Console.Error.WriteLine("[FOCUS] ReclaimFocusAfterResize called");
             FocusContent();
         }

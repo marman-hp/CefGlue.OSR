@@ -40,6 +40,10 @@ namespace Xilium.CefGlue.Common.Platform
 
         void SetTextInputActive(bool active) { }
 
+        /// <summary>A password field has (or no longer has) focus: the IME must stay off. Hosts whose IME
+        /// doesn't follow <see cref="SetTextInputActive"/> alone (Avalonia on Linux) use this.</summary>
+        void SetPasswordFieldFocused(bool focused) { }
+
         void UpdateImeCompositionBounds(CefRange selectedRange, CefRectangle[] characterBounds) { }
 
         void Focus();

@@ -20,11 +20,9 @@ namespace Xilium.CefGlue.GTK.Interop
         public const int MapShared = 0x01;
         public static readonly IntPtr MapFailed = new IntPtr(-1);
 
-        // void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
         [DllImport(LibC, EntryPoint = "mmap", SetLastError = true)]
         public static extern IntPtr Mmap(IntPtr addr, IntPtr length, int prot, int flags, int fd, IntPtr offset);
 
-        // int munmap(void *addr, size_t length);
         [DllImport(LibC, EntryPoint = "munmap", SetLastError = true)]
         public static extern int Munmap(IntPtr addr, IntPtr length);
 

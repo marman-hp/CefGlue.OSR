@@ -29,34 +29,15 @@ namespace Xilium.CefGlue.GTK
             CefGlueHost host = null)
             : base(cefRequestContextFactory, host)
         {
-            // Browsers are created on the GTK main loop (Application.RunWithSynchronizationContext's context);
-            // popup callbacks arrive on CEF's own thread and are marshaled back through this.
             _uiContext = System.Threading.SynchronizationContext.Current;
             _uiThreadId = System.Environment.CurrentManagedThreadId;
 
             _activeControl = ResolveControl(setupCefWindowInfo, useTextureControl);
-            // Main control only - matches CefGlue.WPF's/CefGlue.WinUI's identical convention (see
-            // BaseCefControl.UseSafeResize's remarks).
             _activeControl.UseSafeResize = true;
 
-            // Wraps _activeControl's own widget so CreatePopupHost has somewhere to layer the
-            // popup as an overlay child, regardless of whether _activeControl is BitmapControl or
-            // TextureControl (see PopupControlHost's own remarks - popup rendering can't live
-            // inside either control's own private widget tree, since it can't assume which one
-            // _activeControl actually is). Mirrors CefGlue.WinUI's/CefGlue.Avalonia's identical
-            // wrapper Grid, just using Gtk.Overlay - GTK4's own built-in "layer floating content
-            // over a main child" widget - instead of a Grid+Margin trick, since GTK has a primitive
-            // purpose-built for exactly this.
             _overlay = Overlay.New();
             _overlay.Child = _activeControl.Widget;
 
-            // Gtk.Overlay paints its own GTK-theme background by default (confirmed live,
-            // 2026-08-10 on WSLg: a plain grey fill visible wherever the main content doesn't
-            // fully cover it, instead of whatever background the consumer's own window/layout had
-            // - _activeControl.Widget used to be added directly to the consumer's own tree before
-            // this wrapper existed, inheriting THEIR background instead). Scoped CssProvider (only
-            // applied to this one Overlay instance, not globally) instead of a global stylesheet
-            // change - same pattern as PopupControlHost's own scoped padding-strip provider.
             const uint StyleProviderPriorityApplication = 600;
             var overlayCss = CssProvider.New();
             overlayCss.LoadFromString("overlay { background: transparent; }");
@@ -134,7 +115,6 @@ namespace Xilium.CefGlue.GTK
                     _textureSurface.ShowOverlayInfo = value;
                 }
 
-                // A static page sends no frames; ask for one so the overlay appears/disappears now.
                 UnderlyingBrowser?.GetHost()?.Invalidate(CefPaintElementType.View);
             }
         }
@@ -157,7 +137,7 @@ namespace Xilium.CefGlue.GTK
         }
 
         /// <summary>
-        /// No-host popup (2026-08-10) - see Platform/PopupControlHost.cs's own remarks. Composites
+        /// No-host popup - see Platform/PopupControlHost.cs's own remarks. Composites
         /// straight into an overlay layer added as a Gtk.Overlay child of _overlay, instead of a
         /// second Gtk.Popover + second BitmapControl - eliminates the whole class of
         /// Wayland/xdg_popup-specific workarounds this method used to need (Autohide grab silently
@@ -252,8 +232,6 @@ namespace Xilium.CefGlue.GTK
                                             CefWindowInfo windowInfo,
                                             CefPopupFeatures popupFeatures)
         {
-            // CEF hands the popup the opener's window info; the popup always gets a BitmapControl, so make it
-            // paint plain bitmaps even when the opener uses shared textures.
             windowInfo.SharedTextureEnabled = false;
 
             var popupChild = new CefGlueBrowser(host: Host);
@@ -261,8 +239,6 @@ namespace Xilium.CefGlue.GTK
             popupChild.Adapter.OnBeforeCreatePopup(ref popUpClient, ref popUpDictionary, windowInfo, popupFeatures);
             popupChild.DisplayHandler = new PopupDisplayHandler(popupChild, this);
 
-            // WHERE the popup shows is the app's choice (IPopupPresenter, default: a transient Gtk.Window); its
-            // lifecycle stays here, in PopupLifeSpanHandler - same as the other hosts.
             var presenter = Host.TryCreateInstance<IPopupPresenter<CefGlueBrowser>>() ?? new WindowPopupPresenter();
             var request = new PopupRequest<CefGlueBrowser>(this, popupChild, popupFeatures);
             popupChild.LifeSpanHandler = new PopupLifeSpanHandler(this, popupChild, presenter, request);
@@ -315,7 +291,6 @@ namespace Xilium.CefGlue.GTK
                 return true;
             }
 
-            // A popup opening its own popup - goes through the same presenter.
             _self.CreatePopupBrowser(ref client, ref extraInfo, windowInfo, popupFeatures, targetDisposition);
             return false;
         }
@@ -333,7 +308,6 @@ namespace Xilium.CefGlue.GTK
             });
         }
 
-        // UI thread: the popup's UI is gone (the user closed it, or after DoClose asked the host to close).
         private void OnHostClosed()
         {
             if (_hostGone)
@@ -344,7 +318,6 @@ namespace Xilium.CefGlue.GTK
             _hostGone = true;
             if (!_closed)
             {
-                // Our own close: DoClose lets this one through.
                 _closing = true;
                 _self.CloseBrowser();
                 _opener.PostToUi(() => _opener.Focus());
@@ -358,10 +331,6 @@ namespace Xilium.CefGlue.GTK
                 return false;
             }
 
-            // The page closed itself (window.close, e.g. a failed "Sign in with Google" popup). Letting CEF
-            // tear the browser down while its UI still hosts it crashes libcef, so cancel CEF's close and
-            // close the UI instead - its Closed event closes the browser again, which then goes through.
-            // Same approach as CAS's HeadlessPopupLifeSpanHandler.DoClose.
             _closing = true;
             var host = _host;
             if (host == null)
@@ -373,8 +342,6 @@ namespace Xilium.CefGlue.GTK
             return true;
         }
 
-        // CEF is still inside its close sequence in these two: remove the UI (if CEF closed the browser some
-        // other way) and dispose afterwards, on the GTK main loop.
         protected override void OnBeforeClose(CefBrowser browser)
         {
             _closed = true;
@@ -408,7 +375,6 @@ namespace Xilium.CefGlue.GTK
         {
             _opener.PostToUi(() =>
             {
-                // Only a window of the popup's own: a presenter that shows popups in a tab keeps the main title.
                 if (_target.Widget.GetRoot() is Window window && window != _opener.Widget.GetRoot() as Window)
                 {
                     window.Title = title;

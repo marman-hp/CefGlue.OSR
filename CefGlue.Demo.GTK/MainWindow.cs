@@ -50,7 +50,6 @@ namespace Xilium.CefGlue.Demo.GTK
 
             _window = ApplicationWindow.New(application);
             _window.Title = $"CefGlue GTK Demo - DI ({(useTexture ? "Texture" : "Bitmap")})";
-            // Comfortably below common laptop panels: some WMs maximize a window that asks for more.
             _window.SetDefaultSize(1000, 650);
 
             _menuBar = PopoverMenuBar.NewFromModel(BuildMenu(application));
@@ -161,7 +160,6 @@ namespace Xilium.CefGlue.Demo.GTK
             _window.AddAction(action);
         }
 
-        // Boolean-state action: GTK draws it as a check item and toggles it on activation.
         private void AddToggleAction(string name, bool initial, Action<bool> onChanged)
         {
             var action = Gio.SimpleAction.NewStateful(name, null, GLib.Variant.NewBoolean(initial));
@@ -180,8 +178,6 @@ namespace Xilium.CefGlue.Demo.GTK
 
             var title = Label.New("New Tab");
             title.Ellipsize = Pango.EllipsizeMode.End;
-            // A scrollable Notebook gives each tab only its minimum width, and an ellipsized label's minimum
-            // is just "..." - WidthChars sets a readable minimum.
             title.WidthChars = 18;
             title.MaxWidthChars = 24;
             title.Xalign = 0;
@@ -270,7 +266,6 @@ namespace Xilium.CefGlue.Demo.GTK
             }
         }
 
-        // The browser already fullscreened the window; hide the rest of the chrome so the page fills it.
         private void SetPageFullscreen(bool fullscreen)
         {
             _menuBar.Visible = !fullscreen;
@@ -311,9 +306,6 @@ namespace Xilium.CefGlue.Demo.GTK
 
         private static readonly HttpClient DevToolsHttpClient = new HttpClient();
 
-        // DevTools docked beside the page: an OSR browser on the inspector, attached to this page's target
-        // through the remote debugging port (same approach as the Avalonia host's ShowDevToolOSR). F12 again
-        // closes it.
         private async void OpenDevTools()
         {
             var tab = ActiveTab;

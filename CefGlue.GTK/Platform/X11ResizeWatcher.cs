@@ -27,9 +27,9 @@ namespace Xilium.CefGlue.GTK.Platform
 
         private const int ConfigureNotify = 22;
         private const long StructureNotifyMask = 1L << 17;
-        private const int XEventSize = 192; // raw XEvent union size - same buffer every X11 head in this project allocates for XNextEvent.
+        private const int XEventSize = 192;
 
-        private const uint AnyButtonMask = 0x1F00; // Button1Mask|Button2Mask|Button3Mask|Button4Mask|Button5Mask
+        private const uint AnyButtonMask = 0x1F00;
 
         [StructLayout(LayoutKind.Sequential)]
         private struct PollFd
@@ -63,9 +63,6 @@ namespace Xilium.CefGlue.GTK.Platform
         private readonly IntPtr _windowId;
         private readonly TimeSpan _settleDelay;
 
-        // Both invoked from THIS class' own watcher thread, never the GTK main loop - callers are
-        // responsible for marshaling (mirrors every other cross-thread entry point in this
-        // project, e.g. BitmapControl.OnFrameReady's _uiContext.Post).
         private readonly Action _onResizeBegin;
         private readonly Action _onResizeSettled;
 

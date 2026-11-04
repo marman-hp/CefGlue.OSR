@@ -130,7 +130,6 @@ namespace Xilium.CefGlue.GTK
 
         public void CopyFrameSurfaceInto(IntPtr destination, int destinationStride, int destinationWidth, int destinationHeight, ref CefRectangle dirtyRect)
         {
-            // Not used - BitmapControl (GTK) uses the simpler allocating GetFrameSurface path.
             dirtyRect = default;
         }
 
