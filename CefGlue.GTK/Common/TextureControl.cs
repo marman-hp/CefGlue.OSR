@@ -1,4 +1,5 @@
 using Gtk;
+using Xilium.CefGlue.Common.Helpers;
 using Xilium.CefGlue.GTK;
 
 namespace Xilium.CefGlue.GTK.Common
@@ -43,6 +44,7 @@ namespace Xilium.CefGlue.GTK.Common
             _glArea.AddTickCallback((widget, frameClock) =>
             {
                 ReportAllocatedSize(widget.GetWidth(), widget.GetHeight());
+                UpdateInfoLabel();
                 return true;
             });
         }
@@ -51,9 +53,96 @@ namespace Xilium.CefGlue.GTK.Common
 
         public override void FocusContent() => _glArea.GrabFocus();
 
+        // Info overlay. BitmapControl burns its text into the CPU frame; there is no CPU frame here, so
+        // it's a plain label that CefGlueBrowser layers over the GLArea.
+        private Label _infoLabel;
+        private GtkTextureRenderSurface _renderSurface;
+        private readonly System.Diagnostics.Stopwatch _fpsStopwatch = System.Diagnostics.Stopwatch.StartNew();
+        private int _frameCount;
+        private int _fps;
+        private long _lastFpsElapsed;
+        private string _infoText;
+
+        public Widget InfoOverlay => _infoLabel ??= CreateInfoLabel();
+
+        private static Label CreateInfoLabel()
+        {
+            var label = Label.New(string.Empty);
+            label.Halign = Align.End;
+            label.Valign = Align.Start;
+            label.MarginTop = 10;
+            label.MarginEnd = 10;
+            label.CanTarget = false;
+            label.Visible = false;
+
+            const uint StyleProviderPriorityApplication = 600;
+            var css = CssProvider.New();
+            css.LoadFromString(
+                "label { background-color: rgba(128, 0, 128, 0.59); color: white; padding: 4px 6px;" +
+                " font-family: 'DejaVu Sans Mono', 'Liberation Mono', 'Ubuntu Mono', monospace; font-size: 11px; }");
+            label.GetStyleContext().AddProvider(css, StyleProviderPriorityApplication);
+            return label;
+        }
+
         public void AttachRenderSurface(GtkTextureRenderSurface renderSurface)
         {
+            _renderSurface = renderSurface;
+            renderSurface.FrameRendered += OnFrameRendered;
             renderSurface.AttachGLArea(_glArea);
+        }
+
+        // GTK thread.
+        private void OnFrameRendered() => _frameCount++;
+
+        // GTK thread, every frame-clock tick. Driven by the tick, not by OnFrameRendered, so the label
+        // still shows (and FPS drops to 0) while the page is idle - e.g. while DevTools is in use. Only
+        // touches the label when the text changes (about once a second): SetText re-lays-out the
+        // Gtk.Overlay, and doing that per frame (twice per frame with DevTools open) made it blink.
+        private void UpdateInfoLabel()
+        {
+            if (_infoLabel == null)
+            {
+                return;
+            }
+
+            if (_renderSurface?.ShowOverlayInfo != true)
+            {
+                if (_infoLabel.Visible)
+                {
+                    _infoLabel.Visible = false;
+                }
+                return;
+            }
+
+            OverlayDiagnostics.EnsureBackgroundSampling();
+
+            var elapsed = _fpsStopwatch.ElapsedMilliseconds;
+            if (elapsed - _lastFpsElapsed >= 1000)
+            {
+                _fps = _frameCount;
+                _frameCount = 0;
+                _lastFpsElapsed = elapsed;
+            }
+
+            var text =
+                $"FPS         : {_fps}\n" +
+                $"Texture     : Enable (GL)\n" +
+                $"CEF version : {OverlayDiagnostics.CefVersion}\n" +
+                $"Processor   : {OverlayDiagnostics.ProcessorName}\n" +
+                $"GPU         : {OverlayDiagnostics.GpuName}\n" +
+                $"Mem Usage   : {OverlayDiagnostics.MemoryUsageMb:F1} MB\n" +
+                $"CPU Usage   : {OverlayDiagnostics.CpuUsagePercent:F1} %\n" +
+                $"GPU Usage   : {OverlayDiagnostics.GpuUsagePercent:F1} %";
+            if (text != _infoText)
+            {
+                _infoText = text;
+                _infoLabel.SetText(text);
+            }
+
+            if (!_infoLabel.Visible)
+            {
+                _infoLabel.Visible = true;
+            }
         }
     }
 }

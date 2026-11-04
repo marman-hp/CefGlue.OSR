@@ -19,6 +19,27 @@ namespace Xilium.CefGlue.GTK.Interop
         // Window gdk_x11_surface_get_xid(GdkSurface* surface); - Window/XID is an unsigned long,
         // same width as IntPtr on every platform this project targets (64-bit Linux).
         [DllImport(GtkLibrary, EntryPoint = "gdk_x11_surface_get_xid")]
-        public static extern IntPtr SurfaceGetXid(IntPtr surface);
+        private static extern IntPtr SurfaceGetXidUnchecked(IntPtr surface);
+
+        [DllImport("libgobject-2.0.so.0")]
+        private static extern IntPtr g_type_name_from_instance(IntPtr instance);
+
+        /// <summary>
+        /// The surface's XID, or zero when it isn't a GdkX11Surface. gdk_x11_surface_get_xid doesn't check
+        /// the type itself: on a Wayland surface it returns whatever sits at the xid field's offset, and
+        /// XSelectInput on that garbage id kills the process with a fatal BadWindow.
+        /// </summary>
+        public static IntPtr SurfaceGetXid(IntPtr surface)
+        {
+            if (surface == IntPtr.Zero)
+            {
+                return IntPtr.Zero;
+            }
+
+            var typeName = Marshal.PtrToStringAnsi(g_type_name_from_instance(surface));
+            return typeName != null && typeName.StartsWith("GdkX11", StringComparison.Ordinal)
+                ? SurfaceGetXidUnchecked(surface)
+                : IntPtr.Zero;
+        }
     }
 }

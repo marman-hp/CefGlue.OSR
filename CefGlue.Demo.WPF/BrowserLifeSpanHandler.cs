@@ -75,36 +75,5 @@ namespace Xilium.CefGlue.Demo.WPF
             client = outClient;
             useDefaultWindow = false;
         }
-
-        protected override void OnAfterCreated(CefBrowser cefBrowser)
-        {
-            var popup = _owner.GetPopup(cefBrowser);
-            if (popup == null)
-            {
-                return;
-            }
-
-            _owner.Control.Dispatcher.Invoke(() =>
-            {
-                var window = new Window
-                {
-                    Width = popup.PopupSize.Width <= 0 ? 808 : popup.PopupSize.Width,
-                    Height = popup.PopupSize.Height <= 0 ? 600 : popup.PopupSize.Height,
-                    Content = popup.Browser.Control,
-                    Owner = Window.GetWindow(_owner.Control),
-                };
-
-                window.Closing += (s, e) => popup.Browser.CloseBrowser();
-
-                window.Show();
-                window.Activate();
-            });
-        }
-
-        protected override void OnBeforeClose(CefBrowser cefBrowser)
-        {
-            base.OnBeforeClose(cefBrowser);
-            _owner.RemovePopup(cefBrowser);
-        }
     }
 }

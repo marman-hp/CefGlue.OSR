@@ -12,6 +12,7 @@ using Xilium.CefGlue.Avalonia.Platform;
 using Xilium.CefGlue.Avalonia.Platform.Linux;
 using Xilium.CefGlue.Common;
 using Xilium.CefGlue.Common.Composition;
+using Xilium.CefGlue.Common.Coordinators;
 using Xilium.CefGlue.Common.Handlers;
 using Xilium.CefGlue.Common.Helpers;
 using Xilium.CefGlue.Common.Platform;
@@ -384,11 +385,16 @@ namespace Xilium.CefGlue.Avalonia
                                         CefPopupFeatures popupFeatures,
                                         CefWindowOpenDisposition targetDisposition)
         {
-            var popupChild = new CefGlueBrowser();
+            var popupChild = new CefGlueBrowser(host: Host);
 
             popupChild.Adapter.OnBeforeCreatePopup(ref popUpClient, ref popUpDictionary, windowInfo, popupFeatures);
-            popupChild.DisplayHandler = new PopupDisplayHandler(popupChild);
-            popupChild.LifeSpanHandler = LifeSpanHandler;
+            popupChild.DisplayHandler = new PopupDisplayHandler(popupChild, this);
+
+            // WHERE the popup shows is the app's choice (IPopupPresenter, default: an owned Window); its
+            // lifecycle stays here, in PopupLifeSpanHandler - same as CefGlue.WinForms/WinUI.
+            var presenter = Host.TryCreateInstance<IPopupPresenter<CefGlueBrowser>>() ?? new WindowPopupPresenter();
+            var request = new PopupRequest<CefGlueBrowser>(this, popupChild, popupFeatures);
+            popupChild.LifeSpanHandler = new PopupLifeSpanHandler(this, popupChild, presenter, request);
 
             var size = (popupFeatures.Width == null || popupFeatures.Height == null)
                 ? new global::Avalonia.Size()
@@ -407,6 +413,15 @@ namespace Xilium.CefGlue.Avalonia
             return _popupCollection.Find(entry => entry.Browser.UnderlyingBrowser?.Identifier == browser.Identifier);
         }
 
+        /// <summary>Forgets and disposes a popup this browser opened (closed, or its creation aborted).</summary>
+        internal void DisposePopup(CefGlueBrowser popup)
+        {
+            if (_popupCollection.RemoveAll(entry => ReferenceEquals(entry.Browser, popup)) > 0)
+            {
+                popup.Dispose();
+            }
+        }
+
         public void RemovePopup(CefBrowser browser)
         {
             var item = _popupCollection.SingleOrDefault(entry => entry.Browser.UnderlyingBrowser?.Identifier == browser.Identifier);
@@ -418,19 +433,142 @@ namespace Xilium.CefGlue.Avalonia
         }
     }
 
+    /// <summary>
+    /// Lifecycle of a window.open popup: shows it through the <see cref="IPopupPresenter{TBrowser}"/>, closes the
+    /// browser when its UI goes away, and handles the page closing itself (window.close) without crashing
+    /// libcef - mirrors CefGlue.WinForms' and CefGlue.WinUI's PopupLifeSpanHandler.
+    /// </summary>
+    internal class PopupLifeSpanHandler : LifeSpanHandler
+    {
+        private readonly CefGlueBrowser _opener;
+        private readonly CefGlueBrowser _self;
+        private readonly IPopupPresenter<CefGlueBrowser> _presenter;
+        private readonly PopupRequest<CefGlueBrowser> _request;
+        private IPopupHost _host;
+        private volatile bool _closing;
+        private volatile bool _closed;
+        private bool _hostGone;
+
+        public PopupLifeSpanHandler(CefGlueBrowser opener, CefGlueBrowser self, IPopupPresenter<CefGlueBrowser> presenter, PopupRequest<CefGlueBrowser> request)
+        {
+            _opener = opener;
+            _self = self;
+            _presenter = presenter;
+            _request = request;
+        }
+
+        protected override bool OnBeforePopup(CefBrowser browser, CefFrame frame, int popupId, string targetUrl,
+            string targetFrameName, CefWindowOpenDisposition targetDisposition, bool userGesture,
+            CefPopupFeatures popupFeatures, CefWindowInfo windowInfo, ref CefClient client,
+            CefBrowserSettings settings, ref CefDictionaryValue extraInfo, ref bool noJavascriptAccess)
+        {
+            if (targetDisposition != CefWindowOpenDisposition.NewPopup)
+            {
+                Dispatcher.UIThread.Post(() => _self.Address = targetUrl);
+                return true;
+            }
+
+            // A popup opening its own popup - goes through the same presenter.
+            CefClient outClient = null;
+            CefDictionaryValue outExtra = null;
+            Dispatcher.UIThread.Invoke(() =>
+            {
+                _self.CreatePopupBrowser(ref outClient, ref outExtra, windowInfo, popupFeatures, targetDisposition);
+            });
+            client = outClient;
+            extraInfo = outExtra;
+            return false;
+        }
+
+        protected override void OnAfterCreated(CefBrowser browser)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                var host = _presenter.Show(_request);
+                _host = host;
+                if (host != null)
+                {
+                    host.Closed += OnHostClosed;
+                }
+            });
+        }
+
+        // UI thread: the popup's UI is gone (the user closed it, or after DoClose asked the host to close).
+        private void OnHostClosed()
+        {
+            if (_hostGone)
+            {
+                return;
+            }
+
+            _hostGone = true;
+            if (!_closed)
+            {
+                // Our own close: DoClose lets this one through.
+                _closing = true;
+                _self.CloseBrowser();
+                Dispatcher.UIThread.Post(() => _opener.Focus());
+            }
+        }
+
+        protected override bool DoClose(CefBrowser browser)
+        {
+            if (_closing)
+            {
+                return false;
+            }
+
+            // The page closed itself (window.close, e.g. a failed "Sign in with Google" popup). Letting CEF
+            // tear the browser down while its UI still hosts it crashes libcef, so cancel CEF's close and
+            // close the UI instead - its Closed event closes the browser again, which then goes through.
+            // Same approach as CAS's HeadlessPopupLifeSpanHandler.DoClose.
+            _closing = true;
+            var host = _host;
+            if (host == null)
+            {
+                return false;
+            }
+
+            Dispatcher.UIThread.Post(() => host.Close());
+            return true;
+        }
+
+        // CEF is still inside its close sequence in these two: remove the UI (if CEF closed the browser some
+        // other way) and dispose afterwards, on the UI thread.
+        protected override void OnBeforeClose(CefBrowser browser)
+        {
+            _closed = true;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_hostGone)
+                {
+                    _hostGone = true;
+                    _host?.Close();
+                }
+                _opener.DisposePopup(_self);
+            });
+        }
+
+        protected override void OnBeforePopupAborted(CefBrowser browser, int popupId)
+            => Dispatcher.UIThread.Post(() => _opener.DisposePopup(_self));
+    }
+
     internal class PopupDisplayHandler : DisplayHandler
     {
         private readonly CefGlueBrowser _target;
+        private readonly CefGlueBrowser _opener;
 
-        public PopupDisplayHandler(CefGlueBrowser target)
+        public PopupDisplayHandler(CefGlueBrowser target, CefGlueBrowser opener)
         {
             _target = target;
+            _opener = opener;
         }
 
         protected override void OnTitleChange(CefBrowser browser, string title)
         {
             var window = TopLevel.GetTopLevel(_target.Control) as Window;
-            if (window != null)
+            // Only a window of the popup's own: a presenter that shows popups in a tab keeps the main title.
+            if (window != null && window != TopLevel.GetTopLevel(_opener.Control))
             {
                 Dispatcher.UIThread.Post(() => window.Title = title);
             }

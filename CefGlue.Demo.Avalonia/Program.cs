@@ -12,7 +12,7 @@ namespace Xilium.CefGlue.Demo.Avalonia
         [STAThread]
         static int Main(string[] args)
         {
-            var cachePath = Path.Combine(Path.GetTempPath(), "CefGlue_" + Guid.NewGuid().ToString().Replace("-", null));
+            var cachePath = Path.Combine(AppContext.BaseDirectory, "cef_temp");
 
             AppDomain.CurrentDomain.ProcessExit += delegate { Cleanup(cachePath); };
 
@@ -64,6 +64,9 @@ namespace Xilium.CefGlue.Demo.Avalonia
                 appBuilder = appBuilder.With(new X11PlatformOptions
                 {
                     RenderingMode = new[] { X11RenderingMode.Egl, X11RenderingMode.Glx, X11RenderingMode.Software },
+                    // Avalonia only turns IME (IBus/Fcitx) on by itself for a Chinese, Japanese, Vietnamese or
+                    // Korean user language; an English desktop with Mozc/Pinyin installed would get none.
+                    EnableIme = true,
                 });
             }
 

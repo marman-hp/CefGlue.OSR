@@ -204,7 +204,7 @@ namespace Xilium.CefGlue.Demo.Avalonia
 
         private void OnCloseTabMenuItemClick(object sender, RoutedEventArgs e) => CloseActiveTab();
 
-        private void OnOpenDevToolsMenuItemClick(object sender, RoutedEventArgs e) => ActiveTab?.OpenDevTools();
+        private void OnOpenDevToolsMenuItemClick(object sender, RoutedEventArgs e) => ActiveTab?.ToggleDevTools();
 
         private void TabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {

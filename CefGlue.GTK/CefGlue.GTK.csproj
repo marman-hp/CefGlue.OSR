@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <PackageReference Include="GirCore.Gtk-4.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
 
   <ItemGroup>

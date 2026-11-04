@@ -218,7 +218,7 @@ namespace Xilium.CefGlue.Demo.WinUI
             }
         }
 
-        private void OnOpenDevToolsMenuItemClick(object sender, RoutedEventArgs e) => ActiveTab?.OpenDevTools();
+        private void OnOpenDevToolsMenuItemClick(object sender, RoutedEventArgs e) => ActiveTab?.ToggleDevTools();
     }
 
     public interface IActivityLog

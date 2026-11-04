@@ -54,6 +54,7 @@ namespace Xilium.CefGlue.Demo.WPF
             Browser.TitleChanged += (s, title) => TitleChanged?.Invoke(title);
             Browser.FullscreenModeChanged += OnBrowserFullscreenModeChanged;
             Browser.LifeSpanHandler = new BrowserLifeSpanHandler(Browser, openInNewTab);
+            Browser.ContextMenuHandler = new LinkContextMenuHandler(openInNewTab);
             Browser.DevToolsOpened += OnBrowserDevToolsOpened;
             Browser.DevToolsClosed += OnBrowserDevToolsClosed;
             Browser.RenderModeChanged += OnBrowserRenderModeChanged;
@@ -81,39 +82,88 @@ namespace Xilium.CefGlue.Demo.WPF
 
         public void FocusBrowserContent() => Browser.Focus();
 
-        private GridLength _lastDevToolsHeight = new GridLength(300);
+        private const double MinDevToolsWidth = 200;
+        private const double MinPageWidth = 100;
+        private const double SplitterWidth = 5;
+
+        private double _lastDevToolsWidth;
+        private bool _devToolsOpen;
+
+        public bool IsDevToolsOpen => _devToolsOpen;
 
         public void OpenDevTools() => Browser.ShowDevToolOSR(devToolsContentHost);
 
         public void CloseDevTools() => Browser.CloseDevToolOSR();
 
+        public void ToggleDevTools()
+        {
+            if (_devToolsOpen)
+            {
+                CloseDevTools();
+            }
+            else
+            {
+                OpenDevTools();
+            }
+        }
+
         private void OnBrowserDevToolsOpened(FrameworkElement control)
         {
-            devToolsSplitterRow.Height = new GridLength(5);
-            devToolsRow.Height = _lastDevToolsHeight;
+            _devToolsOpen = true;
+            // First open: page ~60%, DevTools ~40%; after that, keep the width the user dragged to.
+            var available = contentGrid.ActualWidth;
+            var width = _lastDevToolsWidth > 0 ? _lastDevToolsWidth : Math.Max(320, available * 0.4);
+            width = Math.Clamp(width, MinDevToolsWidth, Math.Max(MinDevToolsWidth, available - SplitterWidth - MinPageWidth));
+
+            pageColumn.MinWidth = MinPageWidth;
+            devToolsSplitterColumn.Width = new GridLength(SplitterWidth);
+            devToolsColumn.Width = new GridLength(width);
+            devToolsColumn.MinWidth = MinDevToolsWidth;
             devToolsSplitter.Visibility = Visibility.Visible;
         }
 
         private void OnBrowserDevToolsClosed()
         {
+            _devToolsOpen = false;
 
-            if (devToolsRow.Height.Value > 0)
+            if (devToolsColumn.ActualWidth > 0)
             {
-                _lastDevToolsHeight = devToolsRow.Height;
+                _lastDevToolsWidth = devToolsColumn.ActualWidth;
             }
 
-            devToolsSplitterRow.Height = new GridLength(0);
-            devToolsRow.Height = new GridLength(0);
+            // MinWidth first, or the column keeps 200px.
+            devToolsColumn.MinWidth = 0;
+            pageColumn.MinWidth = 0;
+            devToolsSplitterColumn.Width = new GridLength(0);
+            devToolsColumn.Width = new GridLength(0);
             devToolsSplitter.Visibility = Visibility.Collapsed;
         }
 
         private void OnCloseDevToolsClick(object sender, RoutedEventArgs e) => CloseDevTools();
 
+        private void OnBackClick(object sender, RoutedEventArgs e)
+        {
+            if (Browser.CanGoBack)
+            {
+                Browser.GoBack();
+            }
+        }
+
+        private void OnForwardClick(object sender, RoutedEventArgs e)
+        {
+            if (Browser.CanGoForward)
+            {
+                Browser.GoForward();
+            }
+        }
+
+        private void OnReloadClick(object sender, RoutedEventArgs e) => Browser.Reload();
+
         private void OnBrowserFullscreenModeChanged(object sender, bool fullscreen)
         {
             Dispatcher.BeginInvoke((Action)(() =>
             {
-                addressBar.Visibility = fullscreen ? Visibility.Collapsed : Visibility.Visible;
+                navigationBar.Visibility = fullscreen ? Visibility.Collapsed : Visibility.Visible;
                 FullscreenModeChanged?.Invoke(fullscreen);
             }));
         }

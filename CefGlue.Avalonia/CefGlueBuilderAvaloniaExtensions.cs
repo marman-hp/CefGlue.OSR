@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Xilium.CefGlue.Common;
 using Xilium.CefGlue.Common.Composition;
+using Xilium.CefGlue.Common.Coordinators;
 
 namespace Xilium.CefGlue.Avalonia
 {
@@ -9,6 +10,8 @@ namespace Xilium.CefGlue.Avalonia
         public static CefGlueBuilder UseAvalonia(this CefGlueBuilder builder)
         {
             builder.Services.AddSingleton<ICefGlueBrowserFactory, AvaloniaCefGlueBrowserFactory>();
+            // Try: an app's own presenter registered before UseAvalonia() wins.
+            builder.Services.TryAddCoordinator<IPopupPresenter<CefGlueBrowser>, WindowPopupPresenter>();
             return builder;
         }
 

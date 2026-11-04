@@ -147,12 +147,16 @@ namespace Xilium.CefGlue.GTK.Common
                 TryStartX11ResizeWatcher();
             }
 
-            if (_x11ResizeWatcher != null)
+            if (_x11ResizeWatcher?.IsResizing == true)
             {
-                // Real settle detection is driving SizeChanged via the watcher's own
-                // onResizeSettled callback below - nothing to do here per-tick.
+                // The user is resizing the window: the watcher's onResizeSettled callback reports the
+                // size once the button is released - nothing to do here per-tick.
                 return;
             }
+
+            // No window resize in progress: size changes that never touch the toplevel (a control
+            // created into an already-mapped window, e.g. a new notebook tab, or sibling widgets
+            // shown/hidden) produce no ConfigureNotify, so they still settle through the tick path.
 
             if (width == _lastCandidateWidth && height == _lastCandidateHeight)
             {

@@ -15,11 +15,8 @@ namespace Xilium.CefGlue.GTK.Platform
 {
     /// <summary>
     /// GTK's IOffScreenTargetHost, mirroring CefGlue.Avalonia's/CefGlue.WinForms' OffScreenControlHost
-    /// in role. v1 scaffold: mouse/keyboard/resize/focus are wired; drag-and-drop, context menu,
-    /// tooltips, fullscreen and cursor updates are stubbed (no-op/never-fire) - not because GTK can't
-    /// do them, but because getting a page rendering and interactive at all is the first milestone
-    /// (mirrors this whole project's "Hello World, then build up incrementally" pattern for every
-    /// other platform head so far).
+    /// in role. Mouse/keyboard/resize/focus, drag-and-drop, context menu, cursor and fullscreen are
+    /// wired; tooltips are still stubbed.
     /// </summary>
     internal class OffScreenControlHost<TControl, TFrame> : IOffScreenTargetHost
         where TControl : BaseCefControl
@@ -368,8 +365,25 @@ namespace Xilium.CefGlue.GTK.Platform
 
         public CefRectangle GetScreenBounds(float deviceScaleFactor) => default;
 
+        // CEF thread (page entering/leaving HTML fullscreen, e.g. a video player).
         public void SetFullscreen(bool fullscreen)
         {
+            _uiContext.Post(_ =>
+            {
+                if (_widget.GetRoot() is not Window window)
+                {
+                    return;
+                }
+
+                if (fullscreen)
+                {
+                    window.Fullscreen();
+                }
+                else
+                {
+                    window.Unfullscreen();
+                }
+            }, null);
         }
 
         public void ReleaseMouseCapture()

@@ -8,37 +8,64 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition x:Name="DevToolsSplitterRow" Height="0"/>
-            <RowDefinition x:Name="DevToolsRow" Height="0"/>
         </Grid.RowDefinitions>
 
-        <TextBox x:Name="AddressBar" Grid.Row="0" Margin="4" KeyDown="OnAddressBarKeyDown"/>
+        <!-- Back / forward / reload left of the address box, like the GTK demo's navigation bar. -->
+        <Grid x:Name="NavigationBar" Grid.Row="0" Margin="4" ColumnSpacing="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" Padding="8,4" ToolTipService.ToolTip="Back" IsTabStop="False" Click="OnBackClick">
+                <FontIcon Glyph="&#xE72B;" FontSize="14"/>
+            </Button>
+            <Button Grid.Column="1" Padding="8,4" ToolTipService.ToolTip="Forward" IsTabStop="False" Click="OnForwardClick">
+                <FontIcon Glyph="&#xE72A;" FontSize="14"/>
+            </Button>
+            <Button Grid.Column="2" Padding="8,4" ToolTipService.ToolTip="Reload" IsTabStop="False" Click="OnReloadClick">
+                <FontIcon Glyph="&#xE72C;" FontSize="14"/>
+            </Button>
+            <TextBox x:Name="AddressBar" Grid.Column="3" KeyDown="OnAddressBarKeyDown"/>
+        </Grid>
 
-        <Grid x:Name="BrowserContainer" Grid.Row="1"/>
+        <!-- Page on the left, DevTools docked on the right once opened (Chrome-style, same as the GTK demo). -->
+        <Grid Grid.Row="1" x:Name="ContentGrid">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition x:Name="DevToolsSplitterColumn" Width="0"/>
+                <ColumnDefinition x:Name="DevToolsColumn" Width="0"/>
+            </Grid.ColumnDefinitions>
 
-        <local:CursorGrid x:Name="DevToolsSplitter" Grid.Row="2" Height="5" HorizontalAlignment="Stretch"
-                          Background="LightGray" Visibility="Collapsed"
-                          HoverCursorShape="SizeNorthSouth"
-                          PointerPressed="OnDevToolsSplitterPointerPressed"
-                          PointerMoved="OnDevToolsSplitterPointerMoved"
-                          PointerReleased="OnDevToolsSplitterPointerReleased"/>
+            <Grid x:Name="BrowserContainer" Grid.Column="0"/>
 
-        <Grid x:Name="DevToolsPanel" Grid.Row="3">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-            <Border Grid.Row="0" Background="#FFE8E8E8">
-                <Grid Margin="4,2,4,2">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="DevTools" VerticalAlignment="Center" FontWeight="Bold"/>
-                    <Button Grid.Column="1" Content="X" Padding="6,0,6,0" Click="OnCloseDevToolsClick"/>
-                </Grid>
-            </Border>
-            <Grid x:Name="DevToolsContentHost" Grid.Row="1"/>
+            <!-- GTK4 Paned look: a 1px grey line inside a 5px white grab area. -->
+            <local:CursorGrid x:Name="DevToolsSplitter" Grid.Column="1" Background="White" Visibility="Collapsed"
+                              HoverCursorShape="SizeWestEast"
+                              PointerPressed="OnDevToolsSplitterPointerPressed"
+                              PointerMoved="OnDevToolsSplitterPointerMoved"
+                              PointerReleased="OnDevToolsSplitterPointerReleased">
+                <Border Width="1" HorizontalAlignment="Center" Background="#FFD0D0D0"/>
+            </local:CursorGrid>
+
+            <Grid x:Name="DevToolsPanel" Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <Border Grid.Row="0" Background="#FFE8E8E8">
+                    <Grid Margin="4,2,4,2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="DevTools" VerticalAlignment="Center" FontWeight="Bold"/>
+                        <Button Grid.Column="1" Content="X" Padding="6,0,6,0" Click="OnCloseDevToolsClick"/>
+                    </Grid>
+                </Border>
+                <Grid x:Name="DevToolsContentHost" Grid.Row="1"/>
+            </Grid>
         </Grid>
     </Grid>
 </UserControl>

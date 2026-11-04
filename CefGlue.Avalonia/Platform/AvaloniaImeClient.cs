@@ -43,5 +43,8 @@ namespace Xilium.CefGlue.Avalonia.Platform
         }
 
         public void NotifyCursorRectangleChanged() => RaiseCursorRectangleChanged();
+
+        /// <summary>Makes Avalonia reset the IME and send this client (and its preedit capability) to it again.</summary>
+        public void ResendToIme() => RequestReset();
     }
 }

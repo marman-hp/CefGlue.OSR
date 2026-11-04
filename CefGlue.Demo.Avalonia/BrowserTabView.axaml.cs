@@ -26,8 +26,9 @@ namespace Xilium.CefGlue.Demo.Avalonia
 
         public Control Control => Browser.Control;
 
-        private RowDefinition DevToolsSplitterRow => RootGrid.RowDefinitions[2];
-        private RowDefinition DevToolsRow => RootGrid.RowDefinitions[3];
+        private ColumnDefinition PageColumn => ContentGrid.ColumnDefinitions[0];
+        private ColumnDefinition DevToolsSplitterColumn => ContentGrid.ColumnDefinitions[1];
+        private ColumnDefinition DevToolsColumn => ContentGrid.ColumnDefinitions[2];
 
         public BrowserTabView(CefGlueHost app, string initialUrl = null, Action<string> openInNewTab = null)
         {
@@ -59,6 +60,7 @@ namespace Xilium.CefGlue.Demo.Avalonia
             Browser.TitleChanged += (s, title) => TitleChanged?.Invoke(title);
             Browser.FullscreenModeChanged += OnBrowserFullscreenModeChanged;
             Browser.LifeSpanHandler = new BrowserLifeSpanHandler(Browser, openInNewTab);
+            Browser.ContextMenuHandler = new LinkContextMenuHandler(openInNewTab);
             if (Browser.RenderModeReason != null)
             {
                 Console.WriteLine($"[demo] RenderMode {Browser.RenderMode}: {Browser.RenderModeReason}");
@@ -88,18 +90,43 @@ namespace Xilium.CefGlue.Demo.Avalonia
 
         public void FocusBrowserContent() => Browser.Focus();
 
-        private GridLength _lastDevToolsHeight = new GridLength(300);
+        private const double MinDevToolsWidth = 200;
+        private const double MinPageWidth = 100;
+        private const double SplitterWidth = 5;
+
+        private double _lastDevToolsWidth;
         private bool _devToolsOpen;
+
+        public bool IsDevToolsOpen => _devToolsOpen;
 
         public void OpenDevTools() => Browser.ShowDevToolOSR(DevToolsContentHost);
 
         public void CloseDevTools() => Browser.CloseDevToolOSR();
 
+        public void ToggleDevTools()
+        {
+            if (_devToolsOpen)
+            {
+                CloseDevTools();
+            }
+            else
+            {
+                OpenDevTools();
+            }
+        }
+
         private void OnBrowserDevToolsOpened(Control control)
         {
             _devToolsOpen = true;
-            DevToolsSplitterRow.Height = new GridLength(5);
-            DevToolsRow.Height = _lastDevToolsHeight;
+            // First open: page ~60%, DevTools ~40%; after that, keep the width the user dragged to.
+            var available = ContentGrid.Bounds.Width;
+            var width = _lastDevToolsWidth > 0 ? _lastDevToolsWidth : Math.Max(320, available * 0.4);
+            width = Math.Clamp(width, MinDevToolsWidth, Math.Max(MinDevToolsWidth, available - SplitterWidth - MinPageWidth));
+
+            PageColumn.MinWidth = MinPageWidth;
+            DevToolsSplitterColumn.Width = new GridLength(SplitterWidth);
+            DevToolsColumn.Width = new GridLength(width);
+            DevToolsColumn.MinWidth = MinDevToolsWidth;
             DevToolsSplitter.IsVisible = true;
         }
 
@@ -107,23 +134,44 @@ namespace Xilium.CefGlue.Demo.Avalonia
         {
             _devToolsOpen = false;
 
-            if (DevToolsRow.Height.Value > 0)
+            if (DevToolsColumn.ActualWidth > 0)
             {
-                _lastDevToolsHeight = DevToolsRow.Height;
+                _lastDevToolsWidth = DevToolsColumn.ActualWidth;
             }
 
-            DevToolsSplitterRow.Height = new GridLength(0);
-            DevToolsRow.Height = new GridLength(0);
+            // MinWidth first, or the column keeps 200px.
+            DevToolsColumn.MinWidth = 0;
+            PageColumn.MinWidth = 0;
+            DevToolsSplitterColumn.Width = new GridLength(0);
+            DevToolsColumn.Width = new GridLength(0);
             DevToolsSplitter.IsVisible = false;
         }
 
         private void OnCloseDevToolsClick(object sender, RoutedEventArgs e) => CloseDevTools();
 
+        private void OnBackClick(object sender, RoutedEventArgs e)
+        {
+            if (Browser.CanGoBack)
+            {
+                Browser.GoBack();
+            }
+        }
+
+        private void OnForwardClick(object sender, RoutedEventArgs e)
+        {
+            if (Browser.CanGoForward)
+            {
+                Browser.GoForward();
+            }
+        }
+
+        private void OnReloadClick(object sender, RoutedEventArgs e) => Browser.Reload();
+
         private void OnBrowserFullscreenModeChanged(object sender, bool fullscreen)
         {
             Dispatcher.UIThread.Post(() =>
             {
-                AddressBar.IsVisible = !fullscreen;
+                NavigationBar.IsVisible = !fullscreen;
                 FullscreenModeChanged?.Invoke(fullscreen);
             });
         }

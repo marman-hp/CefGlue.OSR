@@ -191,7 +191,17 @@ namespace Xilium.CefGlue.Demo.WPF
 
         private void OnCloseTabMenuItemClick(object sender, RoutedEventArgs e) => CloseActiveTab();
 
-        private void OnOpenDevToolsMenuItemClick(object sender, RoutedEventArgs e) => ActiveTab?.OpenDevTools();
+        private void OnOpenDevToolsMenuItemClick(object sender, RoutedEventArgs e) => ActiveTab?.ToggleDevTools();
+
+        // F12 toggles DevTools, also while the page has focus (PreviewKeyDown runs before the browser sees the key).
+        private void OnPreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (e.Key == System.Windows.Input.Key.F12 && System.Windows.Input.Keyboard.Modifiers == System.Windows.Input.ModifierKeys.None)
+            {
+                ActiveTab?.ToggleDevTools();
+                e.Handled = true;
+            }
+        }
 
         private void TabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {

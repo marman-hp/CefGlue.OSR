@@ -51,6 +51,7 @@ namespace Xilium.CefGlue.Demo.WinUI
             Browser.TitleChanged += (s, title) => TitleChanged?.Invoke(title);
             Browser.FullscreenModeChanged += OnBrowserFullscreenModeChanged;
             Browser.LifeSpanHandler = new BrowserLifeSpanHandler(Browser, openInNewTab);
+            Browser.ContextMenuHandler = new LinkContextMenuHandler(openInNewTab);
             Browser.RenderModeChanged += (mode, _) =>
             {
                 LastStatus = $"Done · {mode}";
@@ -75,18 +76,38 @@ namespace Xilium.CefGlue.Demo.WinUI
 
         public void FocusBrowserContent() => Browser.Control.Focus(FocusState.Programmatic);
 
-        private GridLength _lastDevToolsHeight = new GridLength(300);
+        private const double MinDevToolsWidth = 200;
+        private const double MinPageWidth = 100;
+        private const double SplitterWidth = 5;
+
+        private double _lastDevToolsWidth;
         private bool _devToolsOpen;
+
+        public bool IsDevToolsOpen => _devToolsOpen;
 
         public void OpenDevTools() => Browser.ShowDevToolOSR(DevToolsContentHost);
 
         public void CloseDevTools() => Browser.CloseDevToolOSR();
 
+        public void ToggleDevTools()
+        {
+            if (_devToolsOpen)
+            {
+                CloseDevTools();
+            }
+            else
+            {
+                OpenDevTools();
+            }
+        }
+
         private void OnBrowserDevToolsOpened(FrameworkElement control)
         {
             _devToolsOpen = true;
-            DevToolsSplitterRow.Height = new GridLength(5);
-            DevToolsRow.Height = _lastDevToolsHeight;
+            // First open: page ~60%, DevTools ~40%; after that, keep the width the user dragged to.
+            var width = _lastDevToolsWidth > 0 ? _lastDevToolsWidth : Math.Max(320, ContentGrid.ActualWidth * 0.4);
+            DevToolsSplitterColumn.Width = new GridLength(SplitterWidth);
+            DevToolsColumn.Width = new GridLength(ClampDevToolsWidth(width));
             DevToolsSplitter.Visibility = Visibility.Visible;
         }
 
@@ -94,27 +115,51 @@ namespace Xilium.CefGlue.Demo.WinUI
         {
             _devToolsOpen = false;
 
-            if (DevToolsRow.Height.Value > 0)
+            if (DevToolsColumn.Width.Value > 0)
             {
-                _lastDevToolsHeight = DevToolsRow.Height;
+                _lastDevToolsWidth = DevToolsColumn.Width.Value;
             }
 
-            DevToolsSplitterRow.Height = new GridLength(0);
-            DevToolsRow.Height = new GridLength(0);
+            DevToolsSplitterColumn.Width = new GridLength(0);
+            DevToolsColumn.Width = new GridLength(0);
             DevToolsSplitter.Visibility = Visibility.Collapsed;
+        }
+
+        private double ClampDevToolsWidth(double width)
+        {
+            var max = Math.Max(MinDevToolsWidth, ContentGrid.ActualWidth - SplitterWidth - MinPageWidth);
+            return Math.Clamp(width, MinDevToolsWidth, max);
         }
 
         private void OnCloseDevToolsClick(object sender, RoutedEventArgs e) => CloseDevTools();
 
+        private void OnBackClick(object sender, RoutedEventArgs e)
+        {
+            if (Browser.CanGoBack)
+            {
+                Browser.GoBack();
+            }
+        }
+
+        private void OnForwardClick(object sender, RoutedEventArgs e)
+        {
+            if (Browser.CanGoForward)
+            {
+                Browser.GoForward();
+            }
+        }
+
+        private void OnReloadClick(object sender, RoutedEventArgs e) => Browser.Reload();
+
         private bool _isDraggingDevToolsSplitter;
-        private double _dragStartPointerY;
-        private double _dragStartDevToolsRowHeight;
+        private double _dragStartPointerX;
+        private double _dragStartDevToolsWidth;
 
         private void OnDevToolsSplitterPointerPressed(object sender, PointerRoutedEventArgs e)
         {
             _isDraggingDevToolsSplitter = true;
-            _dragStartPointerY = e.GetCurrentPoint(RootGrid).Position.Y;
-            _dragStartDevToolsRowHeight = DevToolsRow.Height.Value;
+            _dragStartPointerX = e.GetCurrentPoint(RootGrid).Position.X;
+            _dragStartDevToolsWidth = DevToolsColumn.Width.Value;
             ((UIElement)sender).CapturePointer(e.Pointer);
         }
 
@@ -125,10 +170,9 @@ namespace Xilium.CefGlue.Demo.WinUI
                 return;
             }
 
-            var currentY = e.GetCurrentPoint(RootGrid).Position.Y;
-            var delta = currentY - _dragStartPointerY;
-            var newHeight = Math.Max(0, _dragStartDevToolsRowHeight - delta);
-            DevToolsRow.Height = new GridLength(newHeight);
+            // Dragging left widens DevTools.
+            var delta = e.GetCurrentPoint(RootGrid).Position.X - _dragStartPointerX;
+            DevToolsColumn.Width = new GridLength(ClampDevToolsWidth(_dragStartDevToolsWidth - delta));
         }
 
         private void OnDevToolsSplitterPointerReleased(object sender, PointerRoutedEventArgs e)
@@ -141,7 +185,7 @@ namespace Xilium.CefGlue.Demo.WinUI
         {
             DispatcherQueue.TryEnqueue(() =>
             {
-                AddressBar.Visibility = fullscreen ? Visibility.Collapsed : Visibility.Visible;
+                NavigationBar.Visibility = fullscreen ? Visibility.Collapsed : Visibility.Visible;
                 FullscreenModeChanged?.Invoke(fullscreen);
             });
         }

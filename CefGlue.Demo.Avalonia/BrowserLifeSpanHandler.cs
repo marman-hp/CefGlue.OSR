@@ -1,5 +1,4 @@
 using System;
-using Avalonia.Controls;
 using Avalonia.Threading;
 using Xilium.CefGlue.Avalonia;
 using Xilium.CefGlue.Common.Handlers;
@@ -56,46 +55,6 @@ namespace Xilium.CefGlue.Demo.Avalonia
             client = outClient;
             extraInfo = outExtra;
             return false;
-        }
-
-        protected override void OnAfterCreated(CefBrowser cefBrowser)
-        {
-            var popup = _owner.GetPopup(cefBrowser);
-            if (popup == null)
-            {
-                return;
-            }
-
-            Dispatcher.UIThread.Post(() =>
-            {
-                var window = new Window
-                {
-                    Title = "Popup",
-                    Width = popup.PopupSize.Width <= 0 ? 808 : popup.PopupSize.Width,
-                    Height = popup.PopupSize.Height <= 0 ? 600 : popup.PopupSize.Height,
-                    Content = popup.Browser.Control,
-                };
-
-                window.Closing += (s, e) => popup.Browser.CloseBrowser();
-
-                var ownerWindow = TopLevel.GetTopLevel(_owner.Control) as Window;
-                if (ownerWindow != null)
-                {
-                    window.Show(ownerWindow);
-                }
-                else
-                {
-                    window.Show();
-                }
-
-                window.Activate();
-            });
-        }
-
-        protected override void OnBeforeClose(CefBrowser cefBrowser)
-        {
-            base.OnBeforeClose(cefBrowser);
-            _owner.RemovePopup(cefBrowser);
         }
     }
 }

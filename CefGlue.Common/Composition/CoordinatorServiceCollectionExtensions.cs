@@ -13,6 +13,15 @@ namespace Xilium.CefGlue.Common.Composition
             return services;
         }
 
+        /// <summary>Registers <typeparamref name="TImplementation"/> only if nothing is registered for <typeparamref name="TInterface"/> yet - for platform defaults.</summary>
+        public static IServiceCollection TryAddCoordinator<TInterface, TImplementation>(this IServiceCollection services)
+            where TInterface : class
+            where TImplementation : class, TInterface
+        {
+            services.TryAddTransient<TInterface, TImplementation>();
+            return services;
+        }
+
         public static IServiceCollection ReplaceCoordinator<TInterface, TImplementation>(this IServiceCollection services)
             where TInterface : class
             where TImplementation : class, TInterface

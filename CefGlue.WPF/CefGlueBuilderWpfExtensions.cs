@@ -2,6 +2,7 @@ using System;
 using Microsoft.Extensions.DependencyInjection;
 using Xilium.CefGlue.Common;
 using Xilium.CefGlue.Common.Composition;
+using Xilium.CefGlue.Common.Coordinators;
 
 namespace Xilium.CefGlue.WPF
 {
@@ -10,6 +11,8 @@ namespace Xilium.CefGlue.WPF
         public static CefGlueBuilder UseWpf(this CefGlueBuilder builder)
         {
             builder.Services.AddSingleton<ICefGlueBrowserFactory, WpfCefGlueBrowserFactory>();
+            // Try: an app's own presenter registered before UseWpf() wins.
+            builder.Services.TryAddCoordinator<IPopupPresenter<CefGlueBrowser>, WindowPopupPresenter>();
             return builder;
         }
 

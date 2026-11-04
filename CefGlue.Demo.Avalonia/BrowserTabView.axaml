@@ -2,42 +2,47 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Xilium.CefGlue.Demo.Avalonia.BrowserTabView">
 
-    <Grid x:Name="RootGrid">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="0"/>
-            <RowDefinition Height="0"/>
-        </Grid.RowDefinitions>
+    <Grid x:Name="RootGrid" RowDefinitions="Auto,*">
 
-        <TextBox x:Name="AddressBar" Grid.Row="0" Margin="4" KeyDown="OnAddressBarKeyDown"/>
+        <!-- Back / forward / reload left of the address box, like the GTK demo's navigation bar. -->
+        <Grid x:Name="NavigationBar" Grid.Row="0" Margin="4" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="4">
+            <Button Grid.Column="0" Content="&#x2190;" ToolTip.Tip="Back" Focusable="False" Click="OnBackClick"/>
+            <Button Grid.Column="1" Content="&#x2192;" ToolTip.Tip="Forward" Focusable="False" Click="OnForwardClick"/>
+            <Button Grid.Column="2" Content="&#x21BB;" ToolTip.Tip="Reload" Focusable="False" Click="OnReloadClick"/>
+            <TextBox x:Name="AddressBar" Grid.Column="3" KeyDown="OnAddressBarKeyDown"/>
+        </Grid>
 
-        <!-- Direct child, no ScrollViewer/ZoomHost wrapper - mirrors CefGlue.Demo.WPF's identical
-             browserContainer now that CDP device emulation is gone (see BrowserTabView.axaml.cs's
-             own remarks for why it was removed). -->
-        <Grid x:Name="BrowserContainer" Grid.Row="1"/>
+        <!-- Page on the left, DevTools docked on the right once opened (Chrome-style, same as the GTK,
+             WinForms and WinUI demos). The splitter and DevTools columns start at 0 width. -->
+        <Grid x:Name="ContentGrid" Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="0"/>
+                <ColumnDefinition Width="0"/>
+            </Grid.ColumnDefinitions>
 
-        <!-- Real Avalonia GridSplitter (unlike CefGlue.Demo.WinUI, which had to hand-roll CursorGrid
-             since this WindowsAppSDK version ships no native GridSplitter) - mirrors CefGlue.Demo.
-             WPF's identical devToolsSplitter. -->
-        <GridSplitter x:Name="DevToolsSplitter" Grid.Row="2" Height="5" HorizontalAlignment="Stretch"
-                      ResizeDirection="Rows" Background="LightGray" IsVisible="False"/>
+            <!-- Direct child, no ScrollViewer/ZoomHost wrapper - mirrors CefGlue.Demo.WPF's identical
+                 browserContainer now that CDP device emulation is gone (see BrowserTabView.axaml.cs's
+                 own remarks for why it was removed). -->
+            <Grid x:Name="BrowserContainer" Grid.Column="0"/>
 
-        <!-- Hosts the DevTools OSR control once Browser.ShowDevToolOSR creates it - see
-             OpenDevTools's own remarks. Starts at Height="0" (DevToolsRow above, alongside
-             DevToolsSplitterRow) so it takes no space until DevTools is actually opened. -->
-        <Grid x:Name="DevToolsPanel" Grid.Row="3">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-            <Border Grid.Row="0" Background="#FFE8E8E8">
-                <Grid ColumnDefinitions="*,Auto" Margin="4,2,4,2">
-                    <TextBlock Grid.Column="0" Text="DevTools" VerticalAlignment="Center" FontWeight="Bold"/>
-                    <Button Grid.Column="1" Content="X" Padding="6,0,6,0" Click="OnCloseDevToolsClick"/>
-                </Grid>
-            </Border>
-            <Grid x:Name="DevToolsContentHost" Grid.Row="1"/>
+            <!-- GTK4 Paned look: a 1px grey line inside a 5px white grab area. The real GridSplitter is
+                 transparent on top, so the line shows through. -->
+            <Border Grid.Column="1" Background="White"/>
+            <Border Grid.Column="1" Width="1" HorizontalAlignment="Center" Background="#FFD0D0D0"/>
+            <GridSplitter x:Name="DevToolsSplitter" Grid.Column="1" ResizeDirection="Columns"
+                          Background="Transparent" IsVisible="False"/>
+
+            <!-- Hosts the DevTools OSR control once Browser.ShowDevToolOSR creates it. -->
+            <Grid x:Name="DevToolsPanel" Grid.Column="2" RowDefinitions="Auto,*">
+                <Border Grid.Row="0" Background="#FFE8E8E8">
+                    <Grid ColumnDefinitions="*,Auto" Margin="4,2,4,2">
+                        <TextBlock Grid.Column="0" Text="DevTools" VerticalAlignment="Center" FontWeight="Bold"/>
+                        <Button Grid.Column="1" Content="X" Padding="6,0,6,0" Click="OnCloseDevToolsClick"/>
+                    </Grid>
+                </Border>
+                <Grid x:Name="DevToolsContentHost" Grid.Row="1"/>
+            </Grid>
         </Grid>
     </Grid>
 </UserControl>

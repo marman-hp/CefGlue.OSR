@@ -56,13 +56,31 @@ namespace Xilium.CefGlue.GTK.Interop
         public static extern IntPtr eglGetCurrentContext();
 
         [DllImport(EglLibrary)]
-        public static extern IntPtr eglCreateImageKHR(IntPtr dpy, IntPtr ctx, int target, IntPtr buffer, int[] attribList);
-
-        [DllImport(EglLibrary)]
-        [return: MarshalAs(UnmanagedType.I1)]
-        public static extern bool eglDestroyImageKHR(IntPtr dpy, IntPtr image);
-
-        [DllImport(EglLibrary)]
         public static extern IntPtr eglGetProcAddress(string procname);
+
+        // EGL_KHR_image_base entry points: extensions, so libglvnd's libEGL.so.1 doesn't export them -
+        // they have to come from eglGetProcAddress.
+        public delegate IntPtr CreateImageKHRDelegate(IntPtr dpy, IntPtr ctx, int target, IntPtr buffer, int[] attribList);
+        public delegate uint DestroyImageKHRDelegate(IntPtr dpy, IntPtr image);
+
+        private static CreateImageKHRDelegate _createImage;
+        private static DestroyImageKHRDelegate _destroyImage;
+
+        public static IntPtr eglCreateImageKHR(IntPtr dpy, IntPtr ctx, int target, IntPtr buffer, int[] attribList)
+            => (_createImage ??= Load<CreateImageKHRDelegate>("eglCreateImageKHR"))(dpy, ctx, target, buffer, attribList);
+
+        public static bool eglDestroyImageKHR(IntPtr dpy, IntPtr image)
+            => (_destroyImage ??= Load<DestroyImageKHRDelegate>("eglDestroyImageKHR"))(dpy, image) != 0;
+
+        private static T Load<T>(string name) where T : Delegate
+        {
+            var ptr = eglGetProcAddress(name);
+            if (ptr == IntPtr.Zero)
+            {
+                throw new InvalidOperationException($"eglGetProcAddress(\"{name}\") returned NULL.");
+            }
+
+            return Marshal.GetDelegateForFunctionPointer<T>(ptr);
+        }
     }
 }

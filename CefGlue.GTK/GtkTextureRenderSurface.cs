@@ -93,10 +93,43 @@ namespace Xilium.CefGlue.GTK
             glArea.OnUnrealize += (_, _) => CleanupGL();
             glArea.OnRender += (_, _) =>
             {
+                // GtkGLArea makes its context current before emitting "render", so the import and the
+                // draw both happen on the GTK thread in GTK's own GL context.
+                var imported = ImportPendingFrame();
                 DrawFrame();
+                if (imported)
+                {
+                    FrameRendered?.Invoke();
+                }
                 return true;
             };
         }
+
+        public bool ShowOverlayInfo { get; set; }
+
+        /// <summary>Raised on the GTK thread after a new CEF frame was drawn.</summary>
+        public event Action FrameRendered;
+
+        private sealed class PendingFrame
+        {
+            public int Width;
+            public int Height;
+            public uint FourCc;
+            public ulong Modifier;
+            public int[] Fds;
+            public uint[] Offsets;
+            public uint[] Strides;
+
+            public void Close()
+            {
+                foreach (var fd in Fds)
+                {
+                    LibcInterop.Close(fd);
+                }
+            }
+        }
+
+        private PendingFrame _pendingFrame;
 
         private void InitializeGL()
         {
@@ -142,9 +175,21 @@ namespace Xilium.CefGlue.GTK
 
         private void CleanupGL()
         {
+            // An unrealized GLArea has no context: MakeCurrent only logs a GTK critical, and the GL
+            // calls below would then hit whichever context is current (another tab's). The unrealize
+            // handler already released everything in that case.
+            if (_glArea == null || !_glArea.GetRealized())
+            {
+                return;
+            }
+
             try
             {
                 _glArea.MakeCurrent();
+                if (_glArea.GetError() != null)
+                {
+                    return;
+                }
             }
             catch
             {
@@ -231,109 +276,178 @@ namespace Xilium.CefGlue.GTK
             return program;
         }
 
+        // Runs on the CEF thread: CEF's plane fds are only valid inside OnAcceleratedPaint, so
+        // DeliverAcceleratedFrame has to dup() them before anything is handed to the GTK thread.
         protected override Task ExecuteInUIThread(Action action)
         {
-            if (_uiContext == null)
-            {
-                action();
-                return Task.CompletedTask;
-            }
-
-            var tcs = new TaskCompletionSource();
-
-            _uiContext.Post(_ =>
-            {
-                try
-                {
-                    action();
-                    tcs.SetResult();
-                }
-                catch (Exception ex)
-                {
-                    tcs.SetException(ex);
-                }
-            }, null);
-
-            return tcs.Task;
+            action();
+            return Task.CompletedTask;
         }
 
         protected override (int width, int height) GetAcceleratedFrameSize(CefAcceleratedPaintInfo info)
             => (info.Extra.CodedSize.Width, info.Extra.CodedSize.Height);
 
+        private bool _softwareFrameReported;
+
         protected override void DeliverSoftwareFrame(IntPtr buffer, int width, int height, CefRectangle[] dirtyRects)
         {
-            // This surface only exists for the accelerated/shared-texture path (see
-            // CefGlueBrowser.ResolveControl - TextureControl is only selected when
-            // SharedTextureEnabled is on) - CEF should never call OnPaint for a browser configured
-            // this way, so there's nothing to do here. Mirrors WinUITextureRenderSurface's identical
-            // no-op.
+            // A shared-texture browser only gets OnPaint when CEF isn't GPU compositing (GPU process
+            // failed or blocklisted, or --disable-gpu). Nothing to draw it with here; say so once.
+            if (!_softwareFrameReported)
+            {
+                _softwareFrameReported = true;
+                Console.WriteLine("[CefGlue.GTK] TextureControl got a software frame (OnPaint): CEF is not GPU compositing, nothing will be shown.");
+            }
         }
 
+        // CEF thread: dup the plane fds and hand the latest frame to the GTK thread.
         protected override void DeliverAcceleratedFrame(CefAcceleratedPaintInfo info, CefRectangle[] dirtyRects)
         {
+            var width = info.Extra.CodedSize.Width;
+            var height = info.Extra.CodedSize.Height;
+            var planeCount = Math.Min(info.PlaneCount, 4);
+
+            if (width <= 0 || height <= 0 || planeCount <= 0)
+            {
+                return;
+            }
+
+            var frame = new PendingFrame
+            {
+                Width = width,
+                Height = height,
+                FourCc = info.Format == CefColorType.Rgba8888 ? DrmFormatAbgr8888 : DrmFormatArgb8888,
+                Modifier = info.Modifier,
+                Fds = new int[planeCount],
+                Offsets = new uint[planeCount],
+                Strides = new uint[planeCount],
+            };
+
+            for (var i = 0; i < planeCount; i++)
+            {
+                var plane = info.Planes[i];
+                var fd = LibcInterop.Dup(plane.FileDescriptor);
+                if (fd < 0)
+                {
+                    Array.Resize(ref frame.Fds, i);
+                    frame.Close();
+                    return;
+                }
+
+                frame.Fds[i] = fd;
+                frame.Offsets[i] = (uint)plane.Offset;
+                frame.Strides[i] = plane.Stride;
+            }
+
+            PendingFrame previous;
             lock (_glLock)
             {
-                if (_disposed || _glArea == null || _textureId == 0)
+                if (_disposed || _glArea == null)
                 {
+                    frame.Close();
                     return;
                 }
 
-                var width = info.Extra.CodedSize.Width;
-                var height = info.Extra.CodedSize.Height;
+                // Only the newest frame is worth importing.
+                previous = _pendingFrame;
+                _pendingFrame = frame;
+            }
 
-                if (width <= 0 || height <= 0)
+            previous?.Close();
+            _uiContext?.Post(_ =>
+            {
+                if (!_disposed)
                 {
-                    return;
+                    _glArea?.QueueRender();
                 }
+            }, null);
+        }
 
-                _glArea.MakeCurrent();
+        // GTK thread, inside "render" (context current). True when a new frame was imported.
+        private bool ImportPendingFrame()
+        {
+            PendingFrame frame;
+            lock (_glLock)
+            {
+                frame = _pendingFrame;
+                _pendingFrame = null;
+            }
 
-                var fourcc = info.Format == CefColorType.Rgba8888 ? DrmFormatAbgr8888 : DrmFormatArgb8888;
+            if (frame == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                if (_textureId == 0)
+                {
+                    return false;
+                }
 
                 var attribs = new List<int>
                 {
-                    EglInterop.EGL_WIDTH, width,
-                    EglInterop.EGL_HEIGHT, height,
-                    EglInterop.EGL_LINUX_DRM_FOURCC_EXT, unchecked((int)fourcc),
+                    EglInterop.EGL_WIDTH, frame.Width,
+                    EglInterop.EGL_HEIGHT, frame.Height,
+                    EglInterop.EGL_LINUX_DRM_FOURCC_EXT, unchecked((int)frame.FourCc),
                 };
 
-                for (var i = 0; i < info.PlaneCount && i < 4; i++)
+                for (var i = 0; i < frame.Fds.Length; i++)
                 {
-                    AppendPlaneAttribs(attribs, i, info);
+                    AppendPlaneAttribs(attribs, i, frame);
                 }
 
                 attribs.Add(EglInterop.EGL_NONE);
 
                 var display = EglInterop.eglGetCurrentDisplay();
-                var image = EglInterop.eglCreateImageKHR(display, EglInterop.EGL_NO_CONTEXT, EglInterop.EGL_LINUX_DMA_BUF_EXT, IntPtr.Zero, attribs.ToArray());
+                if (display == IntPtr.Zero)
+                {
+                    ReportOnce("GDK's GL context is not EGL (GLX?); dma-buf frames can't be imported.");
+                    return false;
+                }
 
+                var image = EglInterop.eglCreateImageKHR(display, EglInterop.EGL_NO_CONTEXT, EglInterop.EGL_LINUX_DMA_BUF_EXT, IntPtr.Zero, attribs.ToArray());
                 if (image == EglInterop.EGL_NO_IMAGE_KHR)
                 {
-                    // Drop this frame rather than throw - a single failed import (e.g. a transient
-                    // driver hiccup, or an unsupported modifier) shouldn't take the whole render
-                    // pipeline down; the next OnAcceleratedPaint callback gets another chance.
-                    return;
+                    // Drop this frame; the next one gets another chance.
+                    ReportOnce($"eglCreateImageKHR failed (fourcc 0x{frame.FourCc:X8}, modifier 0x{frame.Modifier:X16}).");
+                    return false;
                 }
 
                 GlInterop.glBindTexture(GlInterop.GL_TEXTURE_2D, _textureId);
                 GlInterop.glEGLImageTargetTexture2DOES(GlInterop.GL_TEXTURE_2D, image);
 
-                // Safe to destroy immediately after binding - the driver takes its own reference to
-                // the underlying dma-buf via glEGLImageTargetTexture2DOES, same idiom used by
-                // Weston/wlroots/GStreamer's own EGL dma-buf import paths. Deliberately never calling
-                // gdk_texture_download or routing through GSK at all - the whole point of this class.
+                // The texture keeps its own reference to the dma-buf.
                 EglInterop.eglDestroyImageKHR(display, image);
 
-                CurrentWidth = width;
-                CurrentHeight = height;
+                CurrentWidth = frame.Width;
+                CurrentHeight = frame.Height;
+                return true;
             }
-
-            _glArea.QueueRender();
+            catch (Exception ex)
+            {
+                ReportOnce($"dma-buf import failed: {ex.Message}");
+                return false;
+            }
+            finally
+            {
+                frame.Close();
+            }
         }
 
-        private static void AppendPlaneAttribs(List<int> attribs, int planeIndex, CefAcceleratedPaintInfo info)
+        private bool _importErrorReported;
+
+        private void ReportOnce(string message)
         {
-            var plane = info.Planes[planeIndex];
+            if (!_importErrorReported)
+            {
+                _importErrorReported = true;
+                Console.WriteLine($"[CefGlue.GTK] TextureControl: {message}");
+            }
+        }
+
+        private static void AppendPlaneAttribs(List<int> attribs, int planeIndex, PendingFrame frame)
+        {
             var (fdKey, offsetKey, pitchKey, modLoKey, modHiKey) = planeIndex switch
             {
                 0 => (EglInterop.EGL_DMA_BUF_PLANE0_FD_EXT, EglInterop.EGL_DMA_BUF_PLANE0_OFFSET_EXT, EglInterop.EGL_DMA_BUF_PLANE0_PITCH_EXT, EglInterop.EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT, EglInterop.EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT),
@@ -342,19 +456,24 @@ namespace Xilium.CefGlue.GTK
                 _ => (EglInterop.EGL_DMA_BUF_PLANE3_FD_EXT, EglInterop.EGL_DMA_BUF_PLANE3_OFFSET_EXT, EglInterop.EGL_DMA_BUF_PLANE3_PITCH_EXT, EglInterop.EGL_DMA_BUF_PLANE3_MODIFIER_LO_EXT, EglInterop.EGL_DMA_BUF_PLANE3_MODIFIER_HI_EXT),
             };
 
-            attribs.Add(fdKey); attribs.Add(plane.FileDescriptor);
-            attribs.Add(offsetKey); attribs.Add(unchecked((int)plane.Offset));
-            attribs.Add(pitchKey); attribs.Add(unchecked((int)plane.Stride));
-            attribs.Add(modLoKey); attribs.Add(unchecked((int)(info.Modifier & 0xFFFFFFFFUL)));
-            attribs.Add(modHiKey); attribs.Add(unchecked((int)(info.Modifier >> 32)));
+            attribs.Add(fdKey); attribs.Add(frame.Fds[planeIndex]);
+            attribs.Add(offsetKey); attribs.Add(unchecked((int)frame.Offsets[planeIndex]));
+            attribs.Add(pitchKey); attribs.Add(unchecked((int)frame.Strides[planeIndex]));
+            attribs.Add(modLoKey); attribs.Add(unchecked((int)(frame.Modifier & 0xFFFFFFFFUL)));
+            attribs.Add(modHiKey); attribs.Add(unchecked((int)(frame.Modifier >> 32)));
         }
 
         public override void Dispose()
         {
+            PendingFrame pending;
             lock (_glLock)
             {
                 _disposed = true;
+                pending = _pendingFrame;
+                _pendingFrame = null;
             }
+
+            pending?.Close();
 
             _uiContext?.Post(_ =>
             {

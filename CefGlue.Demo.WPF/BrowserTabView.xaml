@@ -1,24 +1,36 @@
 <UserControl x:Class="Xilium.CefGlue.Demo.WPF.BrowserTabView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             UseLayoutRounding="True">
+    <!-- UseLayoutRounding: keeps the 1px splitter line on a whole pixel instead of a blurred 2px. -->
     <DockPanel LastChildFill="True">
-        <DockPanel DockPanel.Dock="Top">
-            <TextBox x:Name="addressBar" KeyDown="OnAddressBarKeyDown" />
+        <!-- Back / forward / reload left of the address box, like the GTK demo's navigation bar. -->
+        <DockPanel x:Name="navigationBar" DockPanel.Dock="Top" Margin="4" LastChildFill="True">
+            <Button DockPanel.Dock="Left" Content="&#x2190;" Width="28" Margin="0,0,4,0" ToolTip="Back" Focusable="False" Click="OnBackClick" />
+            <Button DockPanel.Dock="Left" Content="&#x2192;" Width="28" Margin="0,0,4,0" ToolTip="Forward" Focusable="False" Click="OnForwardClick" />
+            <Button DockPanel.Dock="Left" Content="&#x21BB;" Width="28" Margin="0,0,4,0" ToolTip="Reload" Focusable="False" Click="OnReloadClick" />
+            <TextBox x:Name="addressBar" VerticalContentAlignment="Center" KeyDown="OnAddressBarKeyDown" />
         </DockPanel>
 
-        <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="*" />
-                <RowDefinition x:Name="devToolsSplitterRow" Height="0" />
-                <RowDefinition x:Name="devToolsRow" Height="0" />
-            </Grid.RowDefinitions>
+        <!-- Page on the left, DevTools docked on the right once opened (Chrome-style, same as the GTK,
+             WinForms, WinUI and Avalonia demos). The splitter and DevTools columns start at 0 width. -->
+        <Grid x:Name="contentGrid">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="pageColumn" Width="*" />
+                <ColumnDefinition x:Name="devToolsSplitterColumn" Width="0" />
+                <ColumnDefinition x:Name="devToolsColumn" Width="0" />
+            </Grid.ColumnDefinitions>
 
-            <Grid x:Name="browserContainer" Grid.Row="0" />
+            <Grid x:Name="browserContainer" Grid.Column="0" />
 
-            <GridSplitter x:Name="devToolsSplitter" Grid.Row="1" Height="5" HorizontalAlignment="Stretch"
-                          ResizeDirection="Rows" Background="LightGray" Visibility="Collapsed" />
+            <!-- GTK4 Paned look: a 1px grey line inside a 5px white grab area. The real GridSplitter is
+                 transparent on top, so the line shows through. -->
+            <Border Grid.Column="1" Background="White" />
+            <Border Grid.Column="1" Width="1" HorizontalAlignment="Center" Background="#FFD0D0D0" />
+            <GridSplitter x:Name="devToolsSplitter" Grid.Column="1" HorizontalAlignment="Stretch"
+                          ResizeDirection="Columns" Background="Transparent" Visibility="Collapsed" />
 
-            <DockPanel x:Name="devtoolControl" Grid.Row="2" LastChildFill="True">
+            <DockPanel x:Name="devtoolControl" Grid.Column="2" LastChildFill="True">
                 <Border DockPanel.Dock="Top" Background="#FFE8E8E8">
                     <DockPanel LastChildFill="False" Margin="4,2,4,2">
                         <TextBlock Text="DevTools" VerticalAlignment="Center" FontWeight="Bold" />

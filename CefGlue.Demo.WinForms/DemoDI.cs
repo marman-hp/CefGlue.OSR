@@ -29,6 +29,7 @@ namespace Xilium.CefGlue.Demo.WinForms
         private readonly ToolStripStatusLabel _statusLabel;
         private readonly TrackBar _zoomTrackBar;
         private readonly ToolStripStatusLabel _zoomValueLabel;
+        private readonly ToolTip _toolTip = new ToolTip();
         private CefGlueHost _app;
         private int _lastActivityListHeight = 150;
 
@@ -43,7 +44,7 @@ namespace Xilium.CefGlue.Demo.WinForms
             var closeTabItem = new ToolStripMenuItem("Close Tab");
             closeTabItem.Click += (s, e) => CloseActiveTab();
 
-            var openDevToolsItem = new ToolStripMenuItem("Open Dev Tools...");
+            var openDevToolsItem = new ToolStripMenuItem("Toggle Dev Tools") { ShortcutKeys = Keys.F12 };
             openDevToolsItem.Click += (s, e) =>
             {
                 if (ActiveTab == null)
@@ -251,6 +252,21 @@ namespace Xilium.CefGlue.Demo.WinForms
             CreateNewTab();
         }
 
+        private Button CreateNavigationButton(string glyph, string tooltip, Action onClick)
+        {
+            var button = new Button
+            {
+                Text = glyph,
+                Font = new Font("Segoe UI Symbol", 10f),
+                Size = new Size(30, 26),
+                Margin = new Padding(0, 0, 2, 0),
+                TabStop = false,
+            };
+            _toolTip.SetToolTip(button, tooltip);
+            button.Click += (s, e) => onClick();
+            return button;
+        }
+
         private void CreateNewTab(string initialUrl = null)
         {
             if (_app == null)
@@ -291,6 +307,20 @@ namespace Xilium.CefGlue.Demo.WinForms
                 }
             });
 
+            // Back / forward / reload left of the address box, like the GTK demo's navigation bar.
+            var navigationButtons = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Left,
+                AutoSize = true,
+                WrapContents = false,
+                Margin = Padding.Empty,
+                Padding = new Padding(0, 0, 2, 0),
+            };
+            navigationButtons.Controls.Add(CreateNavigationButton("←", "Back", () => { if (browser.CanGoBack) browser.GoBack(); }));
+            navigationButtons.Controls.Add(CreateNavigationButton("→", "Forward", () => { if (browser.CanGoForward) browser.GoForward(); }));
+            navigationButtons.Controls.Add(CreateNavigationButton("↻", "Reload", () => browser.Reload()));
+            addressRow.Controls.Add(navigationButtons);
+
             var b = browser.Control;
             b.Dock = DockStyle.Fill;
 
@@ -301,10 +331,8 @@ namespace Xilium.CefGlue.Demo.WinForms
             {
                 Text = "New Tab",
             };
-            tab.Controls.Add(browserPanel);
+            tab.SetContent(browserPanel);
             tab.Controls.Add(addressRow);
-
-            tab.AddDevToolsControls();
 
             _tabControl.TabPages.Add(tab);
             _tabControl.SelectedTab = tab;
@@ -326,6 +354,7 @@ namespace Xilium.CefGlue.Demo.WinForms
             };
 
             browser.LifeSpanHandler = new BrowserLifeSpanHandler(browser, openInNewTab: url => RunOnUiThread(() => CreateNewTab(url)));
+            browser.ContextMenuHandler = new LinkContextMenuHandler(openInNewTab: url => RunOnUiThread(() => CreateNewTab(url)));
             SelfTest.AttachIfEnabled(browser);
 
             browser.LoadStart += (s, e) =>
@@ -493,9 +522,9 @@ namespace Xilium.CefGlue.Demo.WinForms
 
         private readonly Panel _devToolsPanel;
         private readonly Panel _devToolsContentHost;
-        private readonly Splitter _devToolsSplitter;
+        private readonly SplitContainer _split;
         private Control _devToolsControl;
-        private int _lastDevToolsHeight = 300;
+        private int _lastDevToolsWidth;
 
         public bool IsDevToolsOpen { get; private set; }
 
@@ -527,61 +556,104 @@ namespace Xilium.CefGlue.Demo.WinForms
             header.Controls.Add(headerLabel);
             header.Controls.Add(closeButton);
 
-            _devToolsSplitter = new Splitter { Dock = DockStyle.Bottom, Height = 4, Visible = false };
+            // GTK4 Paned look: a 1px grey line on the DevTools edge; the rest of the splitter's grab
+            // area is white so it blends into the panes.
+            var separatorLine = new Panel { Dock = DockStyle.Left, Width = 1, BackColor = Color.FromArgb(0xFF, 0xD0, 0xD0, 0xD0) };
 
-            _devToolsPanel = new Panel { Dock = DockStyle.Bottom, Height = 0, Visible = false };
+            _devToolsPanel = new Panel { Dock = DockStyle.Fill };
             _devToolsPanel.Controls.Add(_devToolsContentHost);
             _devToolsPanel.Controls.Add(header);
+            _devToolsPanel.Controls.Add(separatorLine);
+
+            // Page in Panel1, DevTools docked on the right in Panel2 (Chrome-style, same as the GTK
+            // demo's Gtk.Paned). Panel2 is fixed so resizing the window resizes the page, not DevTools.
+            _split = new SplitContainer
+            {
+                Dock = DockStyle.Fill,
+                Orientation = Orientation.Vertical,
+                FixedPanel = FixedPanel.Panel2,
+                SplitterWidth = 4,
+                BackColor = Color.White,
+                Panel2Collapsed = true,
+            };
+            _split.Panel2.Controls.Add(_devToolsPanel);
 
             Browser.DevToolsOpened += control =>
             {
                 IsDevToolsOpen = true;
                 _devToolsControl = control;
-
-                _devToolsPanel.Height = _lastDevToolsHeight;
-                _devToolsPanel.Visible = true;
-                _devToolsSplitter.Visible = true;
                 _devToolsContentHost.Controls.Add(control);
 
-                PerformLayout();
+                _split.Panel2Collapsed = false;
+                // First open: page ~60%, DevTools ~40%; after that, keep the width the user dragged to.
+                var devToolsWidth = _lastDevToolsWidth > 0 ? _lastDevToolsWidth : Math.Max(320, _split.Width * 2 / 5);
+                _split.SplitterDistance = Math.Max(100, _split.Width - _split.SplitterWidth - devToolsWidth);
+
                 (Browser.Control as BaseCefControl)?.EndResize();
             };
 
             Browser.DevToolsClosed += () =>
             {
                 IsDevToolsOpen = false;
-                if (_devToolsPanel.Height > 0)
+                if (_split.Panel2.Width > 0)
                 {
-                    _lastDevToolsHeight = _devToolsPanel.Height;
+                    _lastDevToolsWidth = _split.Panel2.Width;
                 }
                 _devToolsContentHost.Controls.Clear();
-                _devToolsPanel.Visible = false;
-                _devToolsSplitter.Visible = false;
+                _split.Panel2Collapsed = true;
                 _devToolsControl = null;
 
-                PerformLayout();
                 (Browser.Control as BaseCefControl)?.EndResize();
             };
 
-            _devToolsSplitter.SplitterMoved += (s, e) =>
+            _split.SplitterMoved += (s, e) =>
             {
-                PerformLayout();
                 (Browser.Control as BaseCefControl)?.EndResize();
                 (_devToolsControl as BaseCefControl)?.EndResize();
             };
-
         }
 
-        public void AddDevToolsControls()
+        /// <summary>Puts the page into the split's left panel and the split into the tab.</summary>
+        public void SetContent(Control page)
         {
-            Controls.Add(_devToolsSplitter);
-            Controls.Add(_devToolsPanel);
+            _split.Panel1.Controls.Add(page);
+            Controls.Add(_split);
         }
 
         public void OpenDevTools() => Browser.ShowDevToolOSR();
         public void CloseDevTools() => Browser.CloseDevToolOSR();
 
         public void FocusBrowserContent() => Browser.Control.Focus();
+    }
+
+    /// <summary>Adds "Open link in new tab" at the top of the context menu when right-clicking a link.</summary>
+    internal sealed class LinkContextMenuHandler : ContextMenuHandler
+    {
+        private const int OpenLinkInNewTabCommand = (int)CefMenuId.UserFirst;
+
+        private readonly Action<string> _openInNewTab;
+
+        public LinkContextMenuHandler(Action<string> openInNewTab) => _openInNewTab = openInNewTab;
+
+        protected override void OnBeforeContextMenu(CefBrowser browser, CefFrame frame, CefContextMenuParams state, CefMenuModel model)
+        {
+            if ((state.ContextMenuType & CefContextMenuTypeFlags.Link) != 0 && !string.IsNullOrEmpty(state.LinkUrl))
+            {
+                model.InsertItemAt(0, OpenLinkInNewTabCommand, "Open link in new &tab");
+                model.InsertSeparatorAt(1);
+            }
+        }
+
+        protected override bool OnContextMenuCommand(CefBrowser browser, CefFrame frame, CefContextMenuParams state, int commandId, CefEventFlags eventFlags)
+        {
+            if (commandId != OpenLinkInNewTabCommand)
+            {
+                return false;
+            }
+
+            _openInNewTab(state.LinkUrl);
+            return true;
+        }
     }
 
     public interface IActivityLog

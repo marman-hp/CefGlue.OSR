@@ -73,6 +73,10 @@ namespace Xilium.CefGlue.GTK.Platform
         private IntPtr _rootWindow;
         private Thread _thread;
         private volatile bool _running;
+        private volatile bool _isResizing;
+
+        /// <summary>True from the first ConfigureNotify until the resize settles (button released).</summary>
+        public bool IsResizing => _isResizing;
 
         public X11ResizeWatcher(IntPtr windowId, TimeSpan settleDelay, Action onResizeBegin, Action onResizeSettled)
         {
@@ -123,6 +127,7 @@ namespace Xilium.CefGlue.GTK.Platform
                             if (!isResizing)
                             {
                                 isResizing = true;
+                                _isResizing = true;
                                 _onResizeBegin?.Invoke();
                             }
 
@@ -138,6 +143,7 @@ namespace Xilium.CefGlue.GTK.Platform
                     if (isResizing && lastConfigureNotify.Elapsed >= _settleDelay && !IsAnyButtonHeld())
                     {
                         isResizing = false;
+                        _isResizing = false;
                         _onResizeSettled?.Invoke();
                     }
 

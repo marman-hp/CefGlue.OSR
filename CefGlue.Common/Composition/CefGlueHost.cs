@@ -42,6 +42,18 @@ namespace Xilium.CefGlue.Common.Composition
             return (T)ActivatorUtilities.CreateInstance(_provider, implementationType, parameters);
         }
 
+        /// <summary>Like <see cref="CreateInstance{T}"/>, but returns null when nothing is registered for <typeparamref name="T"/>.</summary>
+        internal T TryCreateInstance<T>(params object[] parameters) where T : class
+        {
+            var implementationType = _services
+                .LastOrDefault(descriptor => descriptor.ServiceType == typeof(T))
+                ?.ImplementationType;
+
+            return implementationType == null
+                ? null
+                : (T)ActivatorUtilities.CreateInstance(_provider, implementationType, parameters);
+        }
+
         public TBrowser CreateBrowser<TBrowser>(CefGlueBrowserOptions options = null) where TBrowser : class
         {
             var factory = _provider.GetService<ICefGlueBrowserFactory>();

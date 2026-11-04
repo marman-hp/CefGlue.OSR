@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Xilium.CefGlue.Common;
 using Xilium.CefGlue.Common.Composition;
+using Xilium.CefGlue.Common.Coordinators;
 
 namespace Xilium.CefGlue.WinUI
 {
@@ -9,6 +10,8 @@ namespace Xilium.CefGlue.WinUI
         public static CefGlueBuilder UseWinUI(this CefGlueBuilder builder)
         {
             builder.Services.AddSingleton<ICefGlueBrowserFactory, WinUICefGlueBrowserFactory>();
+            // Try: an app's own presenter registered before UseWinUI() wins.
+            builder.Services.TryAddCoordinator<IPopupPresenter<CefGlueBrowser>, WindowPopupPresenter>();
             return builder;
         }
 

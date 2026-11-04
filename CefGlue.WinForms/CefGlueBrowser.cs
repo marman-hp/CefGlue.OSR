@@ -8,6 +8,7 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Xilium.CefGlue.Common;
+using Xilium.CefGlue.Common.Coordinators;
 using Xilium.CefGlue.Common.Composition;
 using Xilium.CefGlue.Common.Handlers;
 using Xilium.CefGlue.Common.Helpers;
@@ -142,8 +143,27 @@ namespace Xilium.CefGlue.WinForms
 
             _activeControl = target;
 
-            _activeControlHandleCreatedHandler = (_, _) =>
+            EventHandler handleCreated = null;
+            handleCreated = (_, _) =>
             {
+                // Once only: a recreated handle (reparenting, style changes) must not attach a second time.
+                target.HandleCreated -= handleCreated;
+
+                if (_adapter != null)
+                {
+                    // Popup (window.open, e.g. "Sign in with Google"): CreatePopupBrowser already built the
+                    // adapter, and CEF creates the browser itself - only hand it to the control.
+                    if (_adapter.IsInitialized)
+                    {
+                        target.AttachBrowser(UnderlyingBrowser);
+                    }
+                    else
+                    {
+                        _adapter.Initialized += () => target.AttachBrowser(UnderlyingBrowser);
+                    }
+                    return;
+                }
+
                 base.AttachTarget(CreateOffScreenControlHost());
 
                 _adapter.SetupCefWindowInfo = _setupCefWindowInfo;
@@ -153,6 +173,7 @@ namespace Xilium.CefGlue.WinForms
                     target.AttachBrowser(UnderlyingBrowser);
                 };
             };
+            _activeControlHandleCreatedHandler = handleCreated;
 
             if (_activeControl.IsHandleCreated)
             {
@@ -252,18 +273,18 @@ namespace Xilium.CefGlue.WinForms
                                        CefPopupFeatures popupFeatures,
                                        CefWindowOpenDisposition targetDisposition)
         {
-            var popupChild = new CefGlueBrowser(IsPopupWindow: true);
+            var popupChild = new CefGlueBrowser(IsPopupWindow: true, host: Host);
 
             popupChild.BuildAdapter();
 
             popupChild.Adapter.OnBeforeCreatePopup(ref popUpClient, ref popUpDictionary, windowInfo, popupFeatures);
-            popupChild.DisplayHandler = new PopupDisplayHandler(popupChild);
-            popupChild.Control.Dock = DockStyle.Fill;
+            popupChild.DisplayHandler = new PopupDisplayHandler(popupChild, this);
 
-            var rect = (popupFeatures.Width == null || popupFeatures.Height == null)
-                ? new Size() : new Size(popupFeatures.Width.Value, popupFeatures.Height.Value);
-
-            popupChild.LifeSpanHandler = new PopupLifeSpanHandler(this, popupChild, rect);
+            // WHERE the popup shows is the app's choice (IPopupPresenter<CefGlueBrowser>, default: an owned Form); its
+            // lifecycle stays here, in PopupLifeSpanHandler.
+            var presenter = Host.TryCreateInstance<IPopupPresenter<CefGlueBrowser>>() ?? new FormPopupPresenter();
+            var request = new PopupRequest<CefGlueBrowser>(this, popupChild, popupFeatures);
+            popupChild.LifeSpanHandler = new PopupLifeSpanHandler(this, popupChild, presenter, request);
 
             _pendingPopups.Add(popupChild);
         }
@@ -373,17 +394,27 @@ namespace Xilium.CefGlue.WinForms
         }
     }
 
+    /// <summary>
+    /// Lifecycle of a window.open popup: shows it through the <see cref="IPopupPresenter<CefGlueBrowser>"/>, closes the browser
+    /// when its UI goes away, and handles the page closing itself (window.close) without crashing libcef.
+    /// </summary>
     internal class PopupLifeSpanHandler : LifeSpanHandler
     {
         private readonly CefGlueBrowser _opener;
         private readonly CefGlueBrowser _self;
-        private readonly Size _rect;
+        private readonly IPopupPresenter<CefGlueBrowser> _presenter;
+        private readonly PopupRequest<CefGlueBrowser> _request;
+        private IPopupHost _host;
+        private volatile bool _closing;
+        private volatile bool _closed;
+        private bool _hostGone;
 
-        public PopupLifeSpanHandler(CefGlueBrowser opener, CefGlueBrowser self, Size rect)
+        public PopupLifeSpanHandler(CefGlueBrowser opener, CefGlueBrowser self, IPopupPresenter<CefGlueBrowser> presenter, PopupRequest<CefGlueBrowser> request)
         {
             _opener = opener;
             _self = self;
-            _rect = rect;
+            _presenter = presenter;
+            _request = request;
         }
 
         protected override bool OnBeforePopup(CefBrowser browser, CefFrame frame, int popupId, string targetUrl,
@@ -397,6 +428,7 @@ namespace Xilium.CefGlue.WinForms
                 return true;
             }
 
+            // A popup opening its own popup - goes through the same presenter.
             CefClient outClient = null;
             CefDictionaryValue outExtra = null;
             var parentForm = _self.Control.FindForm();
@@ -413,27 +445,90 @@ namespace Xilium.CefGlue.WinForms
         {
             _opener.PromotePopup(browser.Identifier, _self);
 
-            var parentForm = _opener.Control.FindForm();
-            parentForm.Invoke(() =>
+            _opener.Control.Invoke(() =>
             {
-                var f = new Form { Owner = parentForm, Size = _rect.IsEmpty ? new Size(808, 600) : _rect };
-                f.CreateControl();
-                f.Controls.Add(_self.Control);
+                var host = _presenter.Show(_request);
 
                 if (_self.Control is BitmapControl bitmapControl)
                 {
                     bitmapControl.WireParentResizeEvents();
                 }
 
-                f.FormClosing += (o, e) => _self.CloseBrowser();
-                f.Show();
-                f.Activate();
+                _host = host;
+                if (host != null)
+                {
+                    host.Closed += OnHostClosed;
+                }
             });
         }
 
-        protected override void OnBeforeClose(CefBrowser browser) => _opener.RemovePopupByIdentifier(browser.Identifier);
+        // UI thread: the popup's UI is gone (the user closed it, or after DoClose asked the host to close).
+        private void OnHostClosed()
+        {
+            if (_hostGone)
+            {
+                return;
+            }
+
+            _hostGone = true;
+            if (!_closed)
+            {
+                // Our own close: DoClose lets this one through.
+                _closing = true;
+                _self.CloseBrowser();
+            }
+        }
+
+        protected override bool DoClose(CefBrowser browser)
+        {
+            if (_closing)
+            {
+                return false;
+            }
+
+            // The page closed itself (window.close, e.g. a failed "Sign in with Google" popup). Letting CEF
+            // tear the browser down while its UI still hosts it crashes libcef, so cancel CEF's close and
+            // close the UI instead - its Closed event closes the browser again, which then goes through.
+            // Same approach as CAS's HeadlessPopupLifeSpanHandler.DoClose.
+            _closing = true;
+            var host = _host;
+            return host != null && TryBeginInvoke(() => host.Close());
+        }
+
+        protected override void OnBeforeClose(CefBrowser browser)
+        {
+            _closed = true;
+            var identifier = browser.Identifier;
+
+            // CEF is still inside its close sequence here: remove the UI (if CEF closed the browser some
+            // other way) and dispose afterwards, on the UI thread.
+            if (!TryBeginInvoke(() =>
+                {
+                    if (!_hostGone)
+                    {
+                        _hostGone = true;
+                        _host?.Close();
+                    }
+                    _opener.RemovePopupByIdentifier(identifier);
+                }))
+            {
+                _opener.RemovePopupByIdentifier(identifier);
+            }
+        }
 
         protected override void OnBeforePopupAborted(CefBrowser browser, int popupId) => _opener.AbortPendingPopup(_self);
+
+        private bool TryBeginInvoke(Action action)
+        {
+            var control = _opener.Control;
+            if (control == null || control.IsDisposed || !control.IsHandleCreated)
+            {
+                return false;
+            }
+
+            control.BeginInvoke(action);
+            return true;
+        }
     }
 
     internal sealed class NullPopupHost : IOffScreenPopupHost
@@ -485,19 +580,21 @@ namespace Xilium.CefGlue.WinForms
     internal class PopupDisplayHandler : DisplayHandler
     {
         private readonly CefGlueBrowser _target;
+        private readonly CefGlueBrowser _opener;
 
-        public PopupDisplayHandler(CefGlueBrowser targetForm)
+        public PopupDisplayHandler(CefGlueBrowser target, CefGlueBrowser opener)
         {
-            _target= targetForm;
-
+            _target = target;
+            _opener = opener;
         }
 
         protected override void OnTitleChange(CefBrowser browser, string title)
         {
             var f = _target.Control.FindForm();
-            if (f != null)
+            // Only a form of the popup's own: a presenter that shows popups in a tab keeps the main title.
+            if (f != null && f != _opener.Control?.FindForm())
             {
-                f.Invoke(()=>   f.Text = title);
+                f.Invoke(() => f.Text = title);
             }
         }
     }

@@ -17,7 +17,11 @@
             <MenuBarItem Title="File">
                 <MenuFlyoutItem Text="New Tab" Click="OnNewTabMenuItemClick"/>
                 <MenuFlyoutItem Text="Close Tab" Click="OnCloseTabMenuItemClick"/>
-                <MenuFlyoutItem Text="Open Dev Tools..." Click="OnOpenDevToolsMenuItemClick"/>
+                <MenuFlyoutItem Text="Toggle Dev Tools" Click="OnOpenDevToolsMenuItemClick">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="F12"/>
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
             </MenuBarItem>
             <MenuBarItem Title="View">
                 <ToggleMenuFlyoutItem x:Name="ShowOverlayInfoMenuItem" Text="Show Overlay Info"

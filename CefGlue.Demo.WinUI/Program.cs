@@ -13,7 +13,7 @@ namespace Xilium.CefGlue.Demo.WinUI
         [STAThread]
         private static void Main(string[] args)
         {
-            var cachePath = Path.Combine(Path.GetTempPath(), "CefGlue_" + Guid.NewGuid().ToString().Replace("-", null));
+            var cachePath = Path.Combine(AppContext.BaseDirectory, "cef_temp");
 
             AppDomain.CurrentDomain.ProcessExit += delegate { Cleanup(cachePath); };
 

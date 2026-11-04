@@ -67,6 +67,7 @@ namespace Xilium.CefGlue.Avalonia.Platform
             control.DetachedFromVisualTree += OnDetachedFromVisualTree;
 
             control.LostFocus += OnLostFocus;
+            control.GotFocus += OnGotFocusForIme;
 
             control.PointerMoved += OnPointerMoved;
             control.PointerExited += OnPointerExited;
@@ -89,7 +90,9 @@ namespace Xilium.CefGlue.Avalonia.Platform
             _imeClient.PreeditChanged += OnPreeditChanged;
             control.TextInputMethodClientRequested += (_, e) => e.Client = _imeClient;
 
-            InputMethod.SetIsInputMethodEnabled(control, false);
+            // On Linux CEF doesn't reliably report when a text field gets focus (OnVirtualKeyboardRequested
+            // may never say "text"), so the IME stays enabled while the browser has focus there.
+            InputMethod.SetIsInputMethodEnabled(control, OperatingSystem.IsLinux());
         }
 
         private readonly AvaloniaImeClient _imeClient;
@@ -103,12 +106,75 @@ namespace Xilium.CefGlue.Avalonia.Platform
         {
             Dispatcher.UIThread.Post(() =>
             {
-                InputMethod.SetIsInputMethodEnabled(_control, active);
+                if (!OperatingSystem.IsLinux())
+                {
+                    InputMethod.SetIsInputMethodEnabled(_control, active);
+                }
+
                 if (active)
                 {
                     EnsureImeOpen();
+
+                    if (OperatingSystem.IsLinux())
+                    {
+                        // Avalonia's Linux D-Bus IME (IBus/Fcitx, 12.1.x) tells the IME "this client draws
+                        // preedit" only when the client is set, and drops it if its D-Bus connection isn't up yet
+                        // - which it isn't when the browser takes focus at startup. The IME then draws the
+                        // preedit in its own window at the browser's top-left (CEF reports no composition
+                        // bounds), and the page gets only the commit. A reset makes Avalonia send the client
+                        // and the capability again, now that a text field has focus.
+                        _imeClient.ResendToIme();
+                    }
                 }
             });
+        }
+
+        // Retries after the browser gets focus (Linux): a page can focus its own text field (Google's search box)
+        // with no click and no word from CEF, and right after startup Avalonia's D-Bus IME connection may not be
+        // up yet, so a single re-send can be lost. A retry is skipped while a preedit is open, so typing is never
+        // reset mid-composition, and the retries stop once the IME has sent a preedit to us.
+        private static readonly int[] ImeResendDelaysMs = { 300, 1000, 3000 };
+        private DispatcherTimer _imeResendTimer;
+        private int _imeResendIndex;
+
+        private void OnGotFocusForIme(object sender, RoutedEventArgs e)
+        {
+            if (!OperatingSystem.IsLinux())
+            {
+                return;
+            }
+
+            if (_imeResendTimer == null)
+            {
+                _imeResendTimer = new DispatcherTimer(DispatcherPriority.Background);
+                _imeResendTimer.Tick += OnImeResendTick;
+            }
+
+            _imeResendTimer.Stop();
+            _imeResendIndex = 0;
+            _imeResendTimer.Interval = TimeSpan.FromMilliseconds(ImeResendDelaysMs[0]);
+            _imeResendTimer.Start();
+        }
+
+        private void OnImeResendTick(object sender, EventArgs e)
+        {
+            _imeResendTimer.Stop();
+            if (!_control.IsKeyboardFocusWithin)
+            {
+                return;
+            }
+
+            if (!_preeditActive)
+            {
+                _imeClient.ResendToIme();
+            }
+
+            _imeResendIndex++;
+            if (_imeResendIndex < ImeResendDelaysMs.Length)
+            {
+                _imeResendTimer.Interval = TimeSpan.FromMilliseconds(ImeResendDelaysMs[_imeResendIndex]);
+                _imeResendTimer.Start();
+            }
         }
 
         private void EnsureImeOpen()
@@ -152,6 +218,7 @@ namespace Xilium.CefGlue.Avalonia.Platform
             if (text.Length > 0)
             {
                 _preeditActive = true;
+                _imeResendTimer?.Stop();
                 _commitWindowOpen = false;
                 _preeditCursor = cursor;
                 CompositionUpdated?.Invoke(text, cursor);
@@ -354,6 +421,12 @@ namespace Xilium.CefGlue.Avalonia.Platform
             var ev = e.AsCefMouseEvent(MousePositionReferential, MousePositionOffset);
             MouseButtonPressed?.Invoke(this, ev, button, e.ClickCount);
 
+            if (OperatingSystem.IsLinux())
+            {
+                // A click may focus a text field without CEF saying so (see the constructor). Re-send the
+                // client and its preedit capability to IBus/Fcitx once the click has been handled.
+                Dispatcher.UIThread.Post(_imeClient.ResendToIme, DispatcherPriority.Background);
+            }
         }
 
         private void OnPointerExited(object sender, PointerEventArgs e)

@@ -27,5 +27,11 @@ namespace Xilium.CefGlue.GTK.Interop
         // int munmap(void *addr, size_t length);
         [DllImport(LibC, EntryPoint = "munmap", SetLastError = true)]
         public static extern int Munmap(IntPtr addr, IntPtr length);
+
+        [DllImport(LibC, EntryPoint = "dup", SetLastError = true)]
+        public static extern int Dup(int fd);
+
+        [DllImport(LibC, EntryPoint = "close", SetLastError = true)]
+        public static extern int Close(int fd);
     }
 }

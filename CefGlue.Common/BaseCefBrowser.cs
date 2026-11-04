@@ -90,6 +90,8 @@ namespace Xilium.CefGlue.Common
 
         internal CefGlueAdapter Adapter => _adapter;
 
+        internal CefGlueHost Host => _host;
+
         protected internal abstract IOffScreenPopupHost CreatePopupHost();
 
         protected internal abstract IOffScreenTargetHost CreateOffScreenControlHost();
