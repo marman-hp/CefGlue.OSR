@@ -11,3 +11,6 @@ TestResults/
 
 # CEF runtime - downloaded by get-cef.ps1, never committed (libcef.dll alone is ~265 MB).
 cef/
+
+# Local design notes
+docs/
