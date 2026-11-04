@@ -165,6 +165,7 @@ Include:
 - `Resources/*.pak`
 - `Resources/icudtl.dat`
 - `Resources/locales/*.pak` copied into `locales`.
+- `LICENSE.txt` from the root of the CEF distribution (CEF's license).
 
 **System requirements**
 
@@ -193,4 +194,4 @@ Tested on Ubuntu 22.04 and 24.04 (WSLg). Avalonia is also tested on Ubuntu 24.04
 
 MIT License. See `LICENSE` (Xilium CefGlue authors) and individual project license files.
 
-CEF/Chromium is distributed under its BSD license. See `cef/LICENSE-cef.txt` after downloading CEF.
+CEF/Chromium is distributed under its BSD license: `LICENSE.txt` at the root of the CEF distribution. On Windows, `get-cef.ps1` copies it to `cef/LICENSE-cef.txt` (this folder is not in git). Ship it with your application together with the CEF runtime.

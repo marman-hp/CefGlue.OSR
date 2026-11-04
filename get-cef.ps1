@@ -10,7 +10,7 @@
 
 .PARAMETER FromDirectory
   Copy from an existing CEF runtime folder (one that already holds libcef.dll, the .pak files and
-  locales\) instead of downloading. CEF's own LICENSE.txt (needed for THIRD-PARTY-NOTICES.txt) is
+  locales\) instead of downloading. CEF's own LICENSE.txt (copied to cef\LICENSE-cef.txt) is
   looked for in that folder and up to 4 folders above it, as in an extracted cef_binary_* tree.
 
 .PARAMETER LicenseFile
