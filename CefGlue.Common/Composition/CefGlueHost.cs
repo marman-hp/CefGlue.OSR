@@ -27,9 +27,7 @@ namespace Xilium.CefGlue.Common.Composition
 
         internal T CreateInstance<T>(params object[] parameters)
         {
-            var implementationType = _services
-                .LastOrDefault(descriptor => descriptor.ServiceType == typeof(T))
-                ?.ImplementationType;
+            var implementationType = _services.FindCoordinatorImplementation(typeof(T));
 
             if (implementationType == null)
             {
@@ -45,9 +43,7 @@ namespace Xilium.CefGlue.Common.Composition
         /// <summary>Like <see cref="CreateInstance{T}"/>, but returns null when nothing is registered for <typeparamref name="T"/>.</summary>
         internal T TryCreateInstance<T>(params object[] parameters) where T : class
         {
-            var implementationType = _services
-                .LastOrDefault(descriptor => descriptor.ServiceType == typeof(T))
-                ?.ImplementationType;
+            var implementationType = _services.FindCoordinatorImplementation(typeof(T));
 
             return implementationType == null
                 ? null
