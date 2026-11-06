@@ -28,6 +28,9 @@ Each UI framework provides a thin platform-specific integration layer over the s
 |---|:---:|:---:|:---:|:---:|:---:|
 | Windows x64 | ✓ | ✓ | ✓ | ✓ | — |
 | Linux x64 | — | — | — | ✓ | ✓ |
+| macOS | — | — | — | — | — |
+
+**macOS is not supported yet.**
 
 **Status:** No NuGet packages yet. Build from source.
 
