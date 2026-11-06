@@ -160,6 +160,8 @@ namespace Xilium.CefGlue.Common
 
         public JSDialogHandler JSDialogHandler { get => _adapter.JSDialogHandler; set => _adapter.JSDialogHandler = value; }
 
+        public PermissionHandler PermissionHandler { get => _adapter.PermissionHandler; set => _adapter.PermissionHandler = value; }
+
         public string Address { get => _adapter.Address; set => _adapter.Address = value; }
 
         public bool IsBrowserInitialized => _adapter.IsInitialized;

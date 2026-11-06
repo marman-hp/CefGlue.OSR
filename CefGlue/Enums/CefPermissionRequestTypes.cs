@@ -36,5 +36,12 @@
         WebAppInstallation = 1 << 22,
         WindowManagement = 1 << 23,
         FileSystemAccess = 1 << 24,
+        /// <summary>CEF_PERMISSION_TYPE_LOCAL_NETWORK_ACCESS until CEF API 150; superseded by LocalNetwork and LoopbackNetwork.</summary>
+        LocalNetworkAccessDeprecated = 1 << 25,
+        /// <summary>Local Network Access to a private network address (CEF API 145+).</summary>
+        LocalNetwork = 1 << 26,
+        /// <summary>Local Network Access to a loopback address such as 127.0.0.1 (CEF API 145+).</summary>
+        LoopbackNetwork = 1 << 27,
+        Sensors = 1 << 28,
     }
 }

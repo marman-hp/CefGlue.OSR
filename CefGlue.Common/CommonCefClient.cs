@@ -48,6 +48,11 @@ namespace Xilium.CefGlue.Common
             return _owner.DialogHandler;
         }
 
+        protected override CefPermissionHandler GetPermissionHandler()
+        {
+            return _owner.PermissionHandler;
+        }
+
         protected override CefDownloadHandler GetDownloadHandler()
         {
             return _owner.DownloadHandler;

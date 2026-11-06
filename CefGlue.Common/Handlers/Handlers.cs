@@ -44,6 +44,10 @@
 
     public class DialogHandler : CefDialogHandler { }
 
+    /// <summary>Browsers are Alloy style: without a handler CEF answers every permission prompt with IGNORE, which
+    /// leaves the request pending (e.g. Local Network Access holds a WebSocket before its handshake).</summary>
+    public class PermissionHandler : CefPermissionHandler { }
+
     public class DisplayHandler : CefDisplayHandler
     {
         internal void HandleAddressChange(CefBrowser browser, CefFrame frame, string url)
