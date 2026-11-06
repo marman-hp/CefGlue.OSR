@@ -71,6 +71,7 @@ Linux IME is not supported yet. Avalonia 12.1's IBus/Fcitx5 integration drops th
 - JavaScript bindings.
 - Standard CEF event handlers.
 - Popup and new-window handling.
+- Permission prompts through `browser.PermissionHandler`. Browsers are Alloy style, where CEF answers an unhandled prompt with *ignore* and the request stays pending (e.g. Local Network Access holding a page's WebSocket to `localhost`).
 
 ### Architecture & Dependency Injection
 
@@ -81,6 +82,7 @@ CefGlue.OSR uses a shared coordinator architecture built around **Microsoft.Exte
 - **Framework-specific adapters** — each UI framework provides a thin integration layer over the shared implementation.
 - **Custom service integration** — applications can provide their own services and coordinator implementations.
 - **DI and non-DI usage** — dependency injection is supported without removing the traditional API.
+- **Your app's own container** — `services.AddCefGlue(b => b.UseAvalonia())` registers CefGlue in an existing `IServiceCollection` (ASP.NET Core, Generic Host), so the app and the coordinators share one set of singletons; `CefGlueHost.CreateBuilder()` remains for a container of CefGlue's own.
 
 The `DemoDI` projects demonstrate how to integrate CefGlue.OSR using `IServiceCollection`.
 
